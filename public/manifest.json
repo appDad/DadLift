@@ -4,8 +4,8 @@
   "description": "Daily dumbbell + med ball workouts for a busy dad",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#14181F",
-  "theme_color": "#14181F",
+  "background_color": "#F5F6F8",
+  "theme_color": "#F5F6F8",
   "icons": [
     {
       "src": "/icons/dadlift-icon-192.png",

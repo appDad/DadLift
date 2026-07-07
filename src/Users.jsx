@@ -55,7 +55,7 @@ export default function Users({ onBack }) {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 20px" }}>
-        <div style={{ fontSize: 13, color: "#C6CDD8", lineHeight: 1.5 }}>
+        <div style={{ fontSize: 13, color: "#3D4756", lineHeight: 1.5 }}>
           Anyone on this list can sign in with their Google account and gets their own
           private workouts, streaks, and stats. Removing someone locks them out but
           doesn't delete their data.
@@ -69,8 +69,8 @@ export default function Users({ onBack }) {
             placeholder="their-email@gmail.com"
             type="email"
             style={{
-              flex: 1, boxSizing: "border-box", background: "#161B23", color: "#E8EBF0",
-              border: "1px solid #2A313D", borderRadius: 10, padding: "12px 12px", fontSize: 14,
+              flex: 1, boxSizing: "border-box", background: "#EFF1F5", color: "#1B2430",
+              border: "1px solid #DDE2E9", borderRadius: 10, padding: "12px 12px", fontSize: 14,
             }}
           />
           <button onClick={add} style={{ ...S.startBtn, width: "auto", padding: "0 22px", fontSize: 16 }}>ADD</button>
@@ -79,18 +79,18 @@ export default function Users({ onBack }) {
 
         <div style={{ ...S.card, cursor: "default", display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, color: "#E8EBF0" }}>{ADMIN_EMAIL}</div>
-            <div style={{ fontSize: 11, color: "#8A93A3" }}>admin — always allowed</div>
+            <div style={{ fontSize: 14, color: "#1B2430" }}>{ADMIN_EMAIL}</div>
+            <div style={{ fontSize: 11, color: "#6C7686" }}>admin — always allowed</div>
           </div>
         </div>
 
-        {list === null && <div style={{ fontSize: 13, color: "#5C6575" }}>Loading roster…</div>}
+        {list === null && <div style={{ fontSize: 13, color: "#9AA3B0" }}>Loading roster…</div>}
         {list && list.map((u) => (
           <div key={u.email} style={{ ...S.card, cursor: "default", display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, color: "#E8EBF0" }}>{u.email}</div>
+              <div style={{ fontSize: 14, color: "#1B2430" }}>{u.email}</div>
               {u.added && (
-                <div style={{ fontSize: 11, color: "#8A93A3" }}>
+                <div style={{ fontSize: 11, color: "#6C7686" }}>
                   added {new Date(u.added).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                 </div>
               )}
@@ -99,7 +99,7 @@ export default function Users({ onBack }) {
           </div>
         ))}
         {list && list.length === 0 && (
-          <div style={{ fontSize: 13, color: "#5C6575" }}>No extra users yet — add an email above.</div>
+          <div style={{ fontSize: 13, color: "#9AA3B0" }}>No extra users yet — add an email above.</div>
         )}
       </div>
     </div>

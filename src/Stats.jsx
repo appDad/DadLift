@@ -40,25 +40,25 @@ const exDoneOf = (h) => h.exDone ?? (h.n || 0) * (h.rounds || 1);
 function BarChart({ title, weeks, counts, color }) {
   const max = Math.max(1, ...counts);
   return (
-    <div style={{ background: "#1B212B", borderRadius: 12, padding: 14 }}>
-      <div style={{ fontSize: 11, letterSpacing: 1.5, color: "#8A93A3", fontWeight: 700, textTransform: "uppercase", marginBottom: 10 }}>
+    <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 14 }}>
+      <div style={{ fontSize: 11, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, textTransform: "uppercase", marginBottom: 10 }}>
         {title}
       </div>
       <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 110 }}>
         {counts.map((c, i) => (
           <div key={weeks[i]} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
-            {c > 0 && <div style={{ fontSize: 10, color: "#8A93A3", marginBottom: 3 }}>{c}</div>}
+            {c > 0 && <div style={{ fontSize: 10, color: "#6C7686", marginBottom: 3 }}>{c}</div>}
             <div style={{
               width: "100%", borderRadius: "4px 4px 0 0",
               height: `${(c / max) * 82}%`, minHeight: c > 0 ? 4 : 2,
-              background: c > 0 ? color : "#232A35",
+              background: c > 0 ? color : "#E4E7EC",
             }} />
           </div>
         ))}
       </div>
       <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
         {weeks.map((w, i) => (
-          <div key={w} style={{ flex: 1, textAlign: "center", fontSize: 9, color: "#5C6575" }}>
+          <div key={w} style={{ flex: 1, textAlign: "center", fontSize: 9, color: "#9AA3B0" }}>
             {(i === 0 || i === weeks.length - 1 || i === Math.floor(weeks.length / 2))
               ? new Date(w + "T00:00:00").toLocaleDateString("en-US", { month: "numeric", day: "numeric" })
               : ""}
@@ -128,9 +128,9 @@ export default function Stats({ history, onBack }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 20px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
           {bigStats.map(([k, v]) => (
-            <div key={k} style={{ background: "#1B212B", borderRadius: 10, padding: "12px 0", textAlign: "center" }}>
+            <div key={k} style={{ background: "#FFFFFF", borderRadius: 10, padding: "12px 0", textAlign: "center" }}>
               <div style={{ fontFamily: DISPLAY, fontSize: 26, fontWeight: 700 }}>{v}</div>
-              <div style={{ fontSize: 9, letterSpacing: 1.2, color: "#8A93A3" }}>{k}</div>
+              <div style={{ fontSize: 9, letterSpacing: 1.2, color: "#6C7686" }}>{k}</div>
             </div>
           ))}
         </div>
@@ -139,8 +139,8 @@ export default function Stats({ history, onBack }) {
         <BarChart title="Exercises per week" weeks={m.weeks} counts={m.exercisesPerWeek} color="#5B8DEF" />
         <BarChart title="Reps per week" weeks={m.weeks} counts={m.repsPerWeek} color="#E85D5D" />
 
-        <div style={{ background: "#1B212B", borderRadius: 12, padding: 14 }}>
-          <div style={{ fontSize: 11, letterSpacing: 1.5, color: "#8A93A3", fontWeight: 700, textTransform: "uppercase", marginBottom: 10 }}>
+        <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 14 }}>
+          <div style={{ fontSize: 11, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, textTransform: "uppercase", marginBottom: 10 }}>
             Muscle group split (sets completed)
           </div>
           {Object.keys(GROUPS).map((g) => {
@@ -148,31 +148,31 @@ export default function Stats({ history, onBack }) {
             return (
               <div key={g} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                 <div style={{ width: 74, fontSize: 12, color: GROUPS[g].color, fontWeight: 700 }}>{GROUPS[g].label}</div>
-                <div style={{ flex: 1, height: 14, background: "#232A35", borderRadius: 7, overflow: "hidden" }}>
+                <div style={{ flex: 1, height: 14, background: "#E4E7EC", borderRadius: 7, overflow: "hidden" }}>
                   <div style={{ width: `${(c / m.groupMax) * 100}%`, height: "100%", background: GROUPS[g].color, borderRadius: 7 }} />
                 </div>
-                <div style={{ width: 34, textAlign: "right", fontSize: 12, color: "#8A93A3" }}>{c}</div>
+                <div style={{ width: 34, textAlign: "right", fontSize: 12, color: "#6C7686" }}>{c}</div>
               </div>
             );
           })}
-          <div style={{ fontSize: 10, color: "#5C6575", marginTop: 4 }}>
+          <div style={{ fontSize: 10, color: "#9AA3B0", marginTop: 4 }}>
             Counts what you confirm on the workout summary — including edited and HIIT max-effort sets.
           </div>
         </div>
 
-        <div style={{ background: "#1B212B", borderRadius: 12, padding: 14 }}>
-          <div style={{ fontSize: 11, letterSpacing: 1.5, color: "#8A93A3", fontWeight: 700, textTransform: "uppercase", marginBottom: 10 }}>
+        <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 14 }}>
+          <div style={{ fontSize: 11, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, textTransform: "uppercase", marginBottom: 10 }}>
             Recent sessions
           </div>
           {recent.length === 0 && (
-            <div style={{ fontSize: 13, color: "#5C6575" }}>No workouts logged yet. Go lift something.</div>
+            <div style={{ fontSize: 13, color: "#9AA3B0" }}>No workouts logged yet. Go lift something.</div>
           )}
           {recent.map((h) => (
-            <div key={h.d} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #232A35", fontSize: 13 }}>
-              <div style={{ color: "#C6CDD8" }}>
+            <div key={h.d} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #E4E7EC", fontSize: 13 }}>
+              <div style={{ color: "#3D4756" }}>
                 {new Date(h.d + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
               </div>
-              <div style={{ color: "#8A93A3" }}>
+              <div style={{ color: "#6C7686" }}>
                 {h.mode || "circuit"} · {exDoneOf(h)} sets{h.totalReps ? ` · ${h.totalReps} reps` : ""}
               </div>
             </div>

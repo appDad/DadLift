@@ -6,7 +6,7 @@ import DadLift from "./DadLift.jsx";
 
 const S = {
   splash: {
-    minHeight: "100vh", background: "#14181F", color: "#E8EBF0",
+    minHeight: "100vh", background: "#F5F6F8", color: "#1B2430",
     fontFamily: "system-ui,-apple-system,sans-serif",
     display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
     gap: 18, padding: 24, textAlign: "center",
@@ -18,10 +18,10 @@ const S = {
   googleBtn: {
     display: "flex", alignItems: "center", gap: 12,
     border: "none", borderRadius: 12, padding: "14px 26px",
-    background: "#E8EBF0", color: "#14181F",
+    background: "#1B2430", color: "#F5F6F8",
     fontSize: 16, fontWeight: 600, cursor: "pointer",
   },
-  ghost: { background: "none", border: "none", color: "#8A93A3", fontSize: 14, cursor: "pointer", padding: 8 },
+  ghost: { background: "none", border: "none", color: "#6C7686", fontSize: 14, cursor: "pointer", padding: 8 },
 };
 
 const FONT_CSS = `@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap');`;
@@ -80,7 +80,7 @@ export default function App() {
       <div style={S.splash}>
         <style>{FONT_CSS}</style>
         <div style={S.title}>DADLIFT</div>
-        <div style={{ color: "#5C6575", fontSize: 13, letterSpacing: 2 }}>LOADING…</div>
+        <div style={{ color: "#9AA3B0", fontSize: 13, letterSpacing: 2 }}>LOADING…</div>
       </div>
     );
   }
@@ -91,7 +91,7 @@ export default function App() {
         <style>{FONT_CSS}</style>
         <img src="/icons/dadlift-icon-192.png" alt="" width={110} height={110} style={{ borderRadius: "50%" }} />
         <div style={S.title}>DADLIFT</div>
-        <div style={{ color: "#8A93A3", fontSize: 14, maxWidth: 280 }}>
+        <div style={{ color: "#6C7686", fontSize: 14, maxWidth: 280 }}>
           Daily dumbbell + med ball workouts. Sign in to sync your streak everywhere.
         </div>
         <button style={S.googleBtn} onClick={doSignIn}>
@@ -107,7 +107,7 @@ export default function App() {
       <div style={S.splash}>
         <style>{FONT_CSS}</style>
         <div style={S.title}>DADLIFT</div>
-        <div style={{ color: "#C6CDD8", fontSize: 15, maxWidth: 320, lineHeight: 1.5 }}>
+        <div style={{ color: "#3D4756", fontSize: 15, maxWidth: 320, lineHeight: 1.5 }}>
           Signed in as <b>{user.email}</b>, but this account isn't on the roster yet.
           Ask the admin to add you from the Users screen.
         </div>

@@ -147,11 +147,25 @@ export const POSES = {
     { L: [[32, 58, 56, 68], [56, 68, 76, 84], [32, 58, 30, 84], [32, 58, 36, 84]], head: [28, 53], floor: true },
     { L: [[32, 58, 56, 68], [56, 68, 76, 84], [32, 58, 33, 84], [32, 58, 40, 62]], head: [28, 53], floor: true },
   ],
+  /* ---- chest additions ---- */
+  floorPress: [
+    { L: [[38, 78, 58, 78], [58, 78, 64, 66], [64, 66, 70, 78], [40, 77, 32, 71]], head: [33, 74], db: [[30, 69, 45]], floor: true },
+    { L: [[38, 78, 58, 78], [58, 78, 64, 66], [64, 66, 70, 78], [40, 77, 40, 60]], head: [33, 74], db: [[40, 57, 90]], floor: true },
+  ],
+  fly: [
+    { L: [[38, 78, 58, 78], [58, 78, 64, 66], [64, 66, 70, 78], [40, 77, 26, 74]], head: [33, 74], db: [[24, 73, 90]], floor: true },
+    { L: [[38, 78, 58, 78], [58, 78, 64, 66], [64, 66, 70, 78], [40, 77, 40, 60]], head: [33, 74], db: [[40, 57, 90]], floor: true },
+  ],
+  chestSqueeze: [
+    { L: [...TORSO, ...STAND_LEGS, [50, 26, 44, 32], [50, 26, 56, 32]], head: [50, 14], ball: [[50, 34, 5]], floor: true },
+    { L: [...TORSO, ...STAND_LEGS, [50, 26, 58, 30], [50, 26, 58, 34]], head: [50, 14], ball: [[63, 32, 5]], floor: true },
+  ],
 };
 
 /* ============ built-in exercise database ============ */
 export const GROUPS = {
   back: { label: "Back", color: "#5B8DEF" },
+  chest: { label: "Chest", color: "#9B7EDE" },
   shoulders: { label: "Shoulders", color: "#F2B134" },
   arms: { label: "Arms", color: "#E85D5D" },
   core: { label: "Core", color: "#46C98B" },
@@ -203,6 +217,12 @@ export const BUILTIN = [
   { id: "pyr", grp: "back", name: "Prone Y Raise", type: "reps", pose: "superman", cue: "Face down, arms overhead in a Y, thumbs up. Lift arms and chest, squeeze your mid-back, lower slow." },
   { id: "mc", grp: "core", name: "Mountain Climber", type: "time", secs: 40, pose: "mtnClimber", cue: "High plank. Drive your knees toward your chest in quick alternating steps. Hips stay level." },
   { id: "lr", grp: "core", name: "Leg Raise", type: "reps", pose: "legRaise", cue: "Lie flat, legs straight, hands under your hips. Raise legs to vertical, lower slow without arching your back." },
+  /* ---- chest ---- */
+  { id: "fp", grp: "chest", name: "Floor Press", type: "reps", pose: "floorPress", cue: "Lie on your back, knees bent, dumbbells over your chest. Lower until your triceps touch the floor, press back up." },
+  { id: "fly", grp: "chest", name: "Floor Fly", type: "reps", pose: "fly", cue: "Lying down, dumbbells above your chest, slight elbow bend. Open wide until your arms rest near the floor, squeeze back together." },
+  { id: "sqp", grp: "chest", name: "Squeeze Press", type: "reps", pose: "floorPress", cue: "Press the dumbbells together hard over your chest and keep squeezing as you lower and press. Constant tension." },
+  { id: "wpu", grp: "chest", name: "Wide Push-Up", type: "reps", pose: "pushup", cue: "Hands wider than your shoulders. Chest to the floor, press up. Elbows about 45° from your body." },
+  { id: "mbs", grp: "chest", name: "Ball Squeeze Press-Out", type: "reps", pose: "chestSqueeze", cue: "Crush the ball between your palms at chest height, press it straight out, pull it back in. Never stop crushing." },
 ];
 
 /* ============ structured prompt for adding exercises via any LLM ============ */
@@ -211,7 +231,7 @@ export const ADD_PROMPT = `Generate a JSON array of exercises for my workout app
 [{
   "id": "short_unique_id",
   "name": "Exercise Name",
-  "grp": "back" | "shoulders" | "arms" | "core",
+  "grp": "back" | "chest" | "shoulders" | "arms" | "core",
   "type": "reps" | "time",
   "secs": 40,                    // only if type is "time"
   "cue": "One or two sentences of plain-language form instruction.",

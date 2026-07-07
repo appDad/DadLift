@@ -22,15 +22,19 @@ export const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStar
 function buildWorkout(date, allEx, emphasis) {
   const rng = mulberry32(dateSeed(date));
   const groups = Object.keys(GROUPS);
-  // balanced = 2 per group; a focus day gives that group 4 of the 8 slots
-  let counts = Object.fromEntries(groups.map((g) => [g, 2]));
+  // 8 slots total: every group gets at least 1; a focus day gives that group 4,
+  // otherwise the leftover slots rotate deterministically with the date
+  let counts;
   if (emphasis && GROUPS[emphasis]) {
-    const others = groups.filter((g) => g !== emphasis);
-    for (let i = others.length - 1; i > 0; i--) {
+    counts = Object.fromEntries(groups.map((g) => [g, g === emphasis ? 4 : 1]));
+  } else {
+    counts = Object.fromEntries(groups.map((g) => [g, 1]));
+    const order = groups.slice();
+    for (let i = order.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));
-      [others[i], others[j]] = [others[j], others[i]];
+      [order[i], order[j]] = [order[j], order[i]];
     }
-    counts = { [emphasis]: 4, [others[0]]: 2, [others[1]]: 1, [others[2]]: 1 };
+    for (let i = 0; i < 8 - groups.length; i++) counts[order[i % order.length]]++;
   }
   const picks = [];
   for (const g of groups) {
@@ -116,6 +120,25 @@ function speak(txt) {
   } catch (e) { /* no tts */ }
 }
 
+/* parse "14", "fourteen", "twenty five" … from speech transcripts */
+const WORDNUMS = {
+  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
+  ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16,
+  seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50,
+};
+function parseRepCount(transcripts) {
+  for (const t of transcripts) {
+    const m = t.match(/\d{1,3}/);
+    if (m) { const n = +m[0]; if (n > 0 && n < 300) return n; }
+    let total = 0, found = false;
+    for (const w of t.toLowerCase().split(/\s+/)) {
+      if (WORDNUMS[w] != null) { total += WORDNUMS[w]; found = true; }
+    }
+    if (found && total > 0 && total < 300) return total;
+  }
+  return null;
+}
+
 /* ============ AI coach — Firebase AI Logic (Gemini) ============ */
 async function fetchCoachLine(history, todaySummary) {
   try {
@@ -136,7 +159,7 @@ function Ring({ total, left, color, children }) {
   return (
     <div style={{ position: "relative", width: 210, height: 210 }}>
       <svg viewBox="0 0 200 200" width={210} height={210} style={{ transform: "rotate(-90deg)" }}>
-        <circle cx={100} cy={100} r={R} fill="none" stroke="#2A313D" strokeWidth={10} />
+        <circle cx={100} cy={100} r={R} fill="none" stroke="#DDE2E9" strokeWidth={10} />
         <circle cx={100} cy={100} r={R} fill="none" stroke={color} strokeWidth={10} strokeLinecap="round"
           strokeDasharray={C} strokeDashoffset={C * (1 - frac)} style={{ transition: "stroke-dashoffset 1s linear" }} />
       </svg>
@@ -150,10 +173,10 @@ function Ring({ total, left, color, children }) {
 /* ============ settings screen ============ */
 function Stepper({ label, value, unit, min, max, step, onChange }) {
   const S = styles;
-  const btn = { ...S.pill, width: 44, padding: "8px 0", fontSize: 18, fontWeight: 700, background: "#232A35", color: "#E8EBF0" };
+  const btn = { ...S.pill, width: 44, padding: "8px 0", fontSize: 18, fontWeight: 700, background: "#E4E7EC", color: "#1B2430" };
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#1B212B", borderRadius: 12, padding: "12px 14px" }}>
-      <div style={{ fontSize: 14, color: "#C6CDD8" }}>{label}</div>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", borderRadius: 12, padding: "12px 14px" }}>
+      <div style={{ fontSize: 14, color: "#3D4756" }}>{label}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <button style={btn} onClick={() => onChange(Math.max(min, +(value - step).toFixed(1)))}>−</button>
         <div style={{ fontFamily: DISPLAY, fontSize: 22, fontWeight: 700, minWidth: 58, textAlign: "center" }}>
@@ -165,7 +188,7 @@ function Stepper({ label, value, unit, min, max, step, onChange }) {
   );
 }
 
-function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, onBack, userEmail, onSignOut }) {
+function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, micOn, setMicOn, onBack, userEmail, onSignOut }) {
   const S = styles;
   return (
     <div style={S.app}>
@@ -181,19 +204,26 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
         <div style={S.settingsLabel}>HIIT MODE</div>
         <Stepper label="Work interval" value={hiit[0]} unit="s" min={10} max={90} step={5} onChange={(v) => setHiit([v, hiit[1]])} />
         <Stepper label="Rest interval" value={hiit[1]} unit="s" min={5} max={60} step={5} onChange={(v) => setHiit([hiit[0], v])} />
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", borderRadius: 12, padding: "12px 14px" }}>
+          <div style={{ fontSize: 14, color: "#3D4756" }}>Mic: say your rep count after max-effort sets</div>
+          <button onClick={() => setMicOn(!micOn)}
+            style={{ ...S.pill, background: micOn ? "#1B2430" : "#E4E7EC", color: micOn ? "#F5F6F8" : "#3D4756" }}>
+            {micOn ? "ON" : "OFF"}
+          </button>
+        </div>
         <div style={S.settingsLabel}>BOTH MODES</div>
         <Stepper label="Rest between rounds" value={roundRest} unit="s" min={15} max={180} step={15} onChange={setRoundRest} />
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#1B212B", borderRadius: 12, padding: "12px 14px" }}>
-          <div style={{ fontSize: 14, color: "#C6CDD8" }}>Voice (rep counting + announcements)</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", borderRadius: 12, padding: "12px 14px" }}>
+          <div style={{ fontSize: 14, color: "#3D4756" }}>Voice (rep counting + announcements)</div>
           <button onClick={() => setVoiceOn(!voiceOn)}
-            style={{ ...S.pill, background: voiceOn ? "#E8EBF0" : "#232A35", color: voiceOn ? "#14181F" : "#C6CDD8" }}>
+            style={{ ...S.pill, background: voiceOn ? "#1B2430" : "#E4E7EC", color: voiceOn ? "#F5F6F8" : "#3D4756" }}>
             {voiceOn ? "ON" : "OFF"}
           </button>
         </div>
         <div style={S.settingsLabel}>ACCOUNT</div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#1B212B", borderRadius: 12, padding: "12px 14px" }}>
-          <div style={{ fontSize: 13, color: "#8A93A3", overflow: "hidden", textOverflow: "ellipsis" }}>{userEmail}</div>
-          <button onClick={onSignOut} style={{ ...S.pill, background: "#232A35", color: "#E85D5D" }}>sign out</button>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", borderRadius: 12, padding: "12px 14px" }}>
+          <div style={{ fontSize: 13, color: "#6C7686", overflow: "hidden", textOverflow: "ellipsis" }}>{userEmail}</div>
+          <button onClick={onSignOut} style={{ ...S.pill, background: "#E4E7EC", color: "#E85D5D" }}>sign out</button>
         </div>
       </div>
     </div>
@@ -252,7 +282,7 @@ function Library({ allEx, custom, onAdd, onRemove, onBack }) {
       <div style={{ display: "flex", gap: 8, padding: "0 16px 14px" }}>
         {["browse", "add", "export"].map((t) => (
           <button key={t} onClick={() => { setTab(t); setMsg(null); }}
-            style={{ ...S.pill, background: tab === t ? "#E8EBF0" : "#232A35", color: tab === t ? "#14181F" : "#C6CDD8" }}>
+            style={{ ...S.pill, background: tab === t ? "#1B2430" : "#E4E7EC", color: tab === t ? "#F5F6F8" : "#3D4756" }}>
             {t}
           </button>
         ))}
@@ -272,9 +302,9 @@ function Library({ allEx, custom, onAdd, onRemove, onBack }) {
                     <Figure frames={resolveFrames(e)} color={GROUPS[g].color} size={44} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontFamily: DISPLAY, fontSize: 17, fontWeight: 600 }}>
-                        {e.name} {isCustom && <span style={{ fontSize: 10, color: "#8A93A3", letterSpacing: 1 }}>CUSTOM</span>}
+                        {e.name} {isCustom && <span style={{ fontSize: 10, color: "#6C7686", letterSpacing: 1 }}>CUSTOM</span>}
                       </div>
-                      <div style={{ fontSize: 12, color: "#8A93A3" }}>{e.type === "time" ? `${e.secs}s hold/work` : "rep-counted"}</div>
+                      <div style={{ fontSize: 12, color: "#6C7686" }}>{e.type === "time" ? `${e.secs}s hold/work` : "rep-counted"}</div>
                     </div>
                     {isCustom && (
                       <button onClick={() => onRemove(e.id)} style={{ ...S.ghostBtn, color: "#E85D5D" }}>remove</button>
@@ -289,7 +319,7 @@ function Library({ allEx, custom, onAdd, onRemove, onBack }) {
 
       {tab === "add" && (
         <div style={{ padding: "0 16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ fontSize: 13, color: "#C6CDD8", lineHeight: 1.5 }}>
+          <div style={{ fontSize: 13, color: "#3D4756", lineHeight: 1.5 }}>
             Copy the prompt, give it to Claude or Gemini with the muscle group and count you want, then paste the JSON below. Paste several batches at once if you want — duplicates (by id or name) are skipped automatically, everything valid gets added.
           </div>
           <button onClick={() => copyText(ADD_PROMPT, "prompt")} style={{ ...S.startBtn, fontSize: 16, padding: "12px 0" }}>
@@ -305,7 +335,7 @@ function Library({ allEx, custom, onAdd, onRemove, onBack }) {
 
       {tab === "export" && (
         <div style={{ padding: "0 16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ fontSize: 13, color: "#C6CDD8" }}>
+          <div style={{ fontSize: 13, color: "#3D4756" }}>
             Full library ({allEx.length} exercises) with frames inlined — portable to any future version of this app.
           </div>
           <button onClick={() => copyText(exportJSON, "export")} style={{ ...S.startBtn, fontSize: 16, padding: "12px 0" }}>
@@ -345,7 +375,10 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [loaded, setLoaded] = useState(false);
   const [summaryRows, setSummaryRows] = useState([]);
   const [lastEntry, setLastEntry] = useState(null);
+  const [micOn, setMicOn] = useState(true);
+  const [heard, setHeard] = useState(null); // last spoken rep count picked up by the mic
   const savedRef = useRef(false);
+  const recRef = useRef(null);
   // live counters mirrored into refs so advance() (called from timer closures) sees fresh values
   const repRef = useRef(0);
   const timeLeftRef = useRef(0);
@@ -370,14 +403,15 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         setMode(s.mode ?? "circuit"); setHiit(s.hiit ?? [40, 20]);
         setRestSecs(s.restSecs ?? 15); setRoundRest(s.roundRest ?? 45);
         setEmphasis(s.emphasis ?? "balanced");
+        setMicOn(s.micOn ?? true);
       }
       setLoaded(true);
     })();
   }, []);
   useEffect(() => {
     if (!loaded) return;
-    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis }, { debounce: 600 });
-  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis]);
+    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn }, { debounce: 600 });
+  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn]);
 
   /* screen wake lock while working out — counting used to die when the phone locked */
   useEffect(() => {
@@ -409,6 +443,36 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     saveJSON("customex", next);
   };
 
+  /* listen for a spoken rep count (HIIT AMRAP sets) and write it into the session log */
+  const stopListening = () => {
+    try { recRef.current && recRef.current.abort(); } catch (e) { /* already stopped */ }
+    recRef.current = null;
+  };
+  const listenForReps = (slotIndex) => {
+    try {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) return;
+      stopListening();
+      const rec = new SR();
+      recRef.current = rec;
+      rec.lang = "en-US";
+      rec.interimResults = false;
+      rec.maxAlternatives = 3;
+      rec.onresult = (e) => {
+        const alts = Array.from(e.results[0]).map((a) => a.transcript);
+        const n = parseRepCount(alts);
+        if (n == null) return;
+        const slot = sessionLogRef.current[slotIndex];
+        if (slot) slot.value = n;
+        setSummaryRows((prev) => (prev.length > slotIndex ? prev.map((r, i) => (i === slotIndex ? { ...r, value: n } : r)) : prev));
+        setHeard(n);
+        say(`${n}. Logged.`);
+      };
+      rec.onerror = () => { /* no mic / denied — summary editing still works */ };
+      rec.start();
+    } catch (e) { /* unsupported browser */ }
+  };
+
   /* record what actually happened for one work slot — feeds the editable summary */
   const logDone = () => {
     const last = sessionLogRef.current[sessionLogRef.current.length - 1];
@@ -422,6 +486,12 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
   const advance = () => {
     logDone();
+    if (mode === "hiit" && ex.type === "reps" && micOn) {
+      // let the "Rest…" announcement finish, then open the mic for the rep count
+      const slot = sessionLogRef.current.length - 1;
+      setHeard(null);
+      setTimeout(() => listenForReps(slot), 2000);
+    }
     beep(1200, 0.25);
     if (idx + 1 < exList.length) {
       setPhase("rest"); setTimeLeft(mode === "hiit" ? hiit[1] : restSecs);
@@ -435,6 +505,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   };
 
   const startNext = () => {
+    stopListening(); setHeard(null);
     if (idx + 1 < exList.length) setIdx(idx + 1);
     else { setRound(round + 1); setIdx(0); }
     setPhase("work"); setRep(0); repRef.current = 0;
@@ -482,6 +553,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const saveSummary = () => {
     if (savedRef.current) return;
     savedRef.current = true;
+    stopListening();
     const done = summaryRows.filter((r) => r.value > 0);
     const groups = {};
     done.forEach((r) => { groups[r.grp] = (groups[r.grp] || 0) + 1; });
@@ -553,6 +625,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const start = () => {
     setRound(1); setIdx(0); setPhase("work"); setRep(0);
     savedRef.current = false; setCoachLine(null); setLastEntry(null);
+    stopListening(); setHeard(null);
     repRef.current = 0; sessionLogRef.current = [];
     const t0 = mode === "hiit" ? hiit[0] : exList[0].type === "time" ? exList[0].secs : 0;
     timeLeftRef.current = t0;
@@ -573,7 +646,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   if (screen === "settings") {
     return <Settings tempo={tempo} setTempo={setTempo} restSecs={restSecs} setRestSecs={setRestSecs}
       roundRest={roundRest} setRoundRest={setRoundRest} hiit={hiit} setHiit={setHiit}
-      voiceOn={voiceOn} setVoiceOn={setVoiceOn} onBack={() => setScreen("home")}
+      voiceOn={voiceOn} setVoiceOn={setVoiceOn} micOn={micOn} setMicOn={setMicOn}
+      onBack={() => setScreen("home")}
       userEmail={user.email} onSignOut={onSignOut} />;
   }
   if (screen === "stats") {
@@ -596,7 +670,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         <style>{FONT_CSS}</style>
         <div style={{ padding: "20px 20px 4px" }}>
           <div style={{ fontFamily: DISPLAY, fontSize: 30, fontWeight: 700, letterSpacing: 1 }}>HOW'D IT GO?</div>
-          <div style={{ fontSize: 13, color: "#8A93A3", marginTop: 4, lineHeight: 1.4 }}>
+          <div style={{ fontSize: 13, color: "#6C7686", marginTop: 4, lineHeight: 1.4 }}>
             Prefilled with what the counter saw. Fix anything you didn't finish — or did extra.
             {mode === "hiit" && " HIIT rep sets were max-effort: punch in what you got."}
           </div>
@@ -607,20 +681,20 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               {rounds > 1 && i % exList.length === 0 && (
                 <div style={{ ...S.settingsLabel, marginTop: i === 0 ? 0 : 12 }}>ROUND {r.round}</div>
               )}
-              <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#1B212B", borderRadius: 10, padding: "8px 12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#FFFFFF", borderRadius: 10, padding: "8px 12px" }}>
                 <div style={{ width: 8, height: 8, borderRadius: 4, background: GROUPS[r.grp].color, flexShrink: 0 }} />
-                <div style={{ flex: 1, fontSize: 14, color: r.value > 0 ? "#E8EBF0" : "#5C6575" }}>{r.name}</div>
+                <div style={{ flex: 1, fontSize: 14, color: r.value > 0 ? "#1B2430" : "#9AA3B0" }}>{r.name}</div>
                 <input
                   type="number" min={0} max={999} value={r.value}
                   onChange={(ev) => setVal(i, +ev.target.value)}
                   onFocus={(ev) => ev.target.select()}
                   style={{
-                    width: 56, textAlign: "center", background: "#161B23", color: "#E8EBF0",
-                    border: "1px solid #2A313D", borderRadius: 8, padding: "8px 4px",
+                    width: 56, textAlign: "center", background: "#EFF1F5", color: "#1B2430",
+                    border: "1px solid #DDE2E9", borderRadius: 8, padding: "8px 4px",
                     fontFamily: DISPLAY, fontSize: 18, fontWeight: 700,
                   }}
                 />
-                <div style={{ width: 52, fontSize: 11, color: "#8A93A3" }}>{r.unit} <span style={{ color: "#5C6575" }}>/ {r.target}</span></div>
+                <div style={{ width: 52, fontSize: 11, color: "#6C7686" }}>{r.unit} <span style={{ color: "#9AA3B0" }}>/ {r.target}</span></div>
               </div>
             </React.Fragment>
           ))}
@@ -629,7 +703,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           <button onClick={saveSummary} style={S.startBtn}>
             SAVE WORKOUT — {doneCount} SET{doneCount === 1 ? "" : "S"}
           </button>
-          <button onClick={() => setScreen("home")} style={{ ...S.ghostBtn, color: "#E85D5D" }}>discard, save nothing</button>
+          <button onClick={() => { stopListening(); setScreen("home"); }} style={{ ...S.ghostBtn, color: "#E85D5D" }}>discard, save nothing</button>
         </div>
       </div>
     );
@@ -649,18 +723,18 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
             </div>
           </div>
           <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <button onClick={() => setScreen("stats")} style={{ ...S.pill, background: "#232A35", color: "#C6CDD8" }}>
+            <button onClick={() => setScreen("stats")} style={{ ...S.pill, background: "#E4E7EC", color: "#3D4756" }}>
               stats
             </button>
-            <button onClick={() => setScreen("library")} style={{ ...S.pill, background: "#232A35", color: "#C6CDD8" }}>
+            <button onClick={() => setScreen("library")} style={{ ...S.pill, background: "#E4E7EC", color: "#3D4756" }}>
               library
             </button>
             {isAdmin && (
-              <button onClick={() => setScreen("users")} style={{ ...S.pill, background: "#232A35", color: "#C6CDD8" }}>
+              <button onClick={() => setScreen("users")} style={{ ...S.pill, background: "#E4E7EC", color: "#3D4756" }}>
                 users
               </button>
             )}
-            <button onClick={() => setScreen("settings")} style={{ ...S.pill, background: "#232A35", color: "#C6CDD8" }}>
+            <button onClick={() => setScreen("settings")} style={{ ...S.pill, background: "#E4E7EC", color: "#3D4756" }}>
               ⚙
             </button>
           </div>
@@ -668,9 +742,9 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
         <div style={{ display: "flex", gap: 10, padding: "0 16px 14px" }}>
           {[["STREAK", streak + "d"], ["THIS WEEK", week], ["TOTAL", history.length]].map(([k, v]) => (
-            <div key={k} style={{ flex: 1, background: "#1B212B", borderRadius: 10, padding: "10px 0", textAlign: "center" }}>
+            <div key={k} style={{ flex: 1, background: "#FFFFFF", borderRadius: 10, padding: "10px 0", textAlign: "center" }}>
               <div style={{ fontFamily: DISPLAY, fontSize: 26, fontWeight: 700 }}>{v}</div>
-              <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#8A93A3" }}>{k}</div>
+              <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686" }}>{k}</div>
             </div>
           ))}
         </div>
@@ -683,21 +757,21 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               <div key={e.id} onClick={() => setPreview(open ? null : e.id)}
                 style={{ ...S.card, borderLeft: `4px solid ${g.color}` }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 56, height: 56, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#161B23", borderRadius: 10 }}>
+                  <div style={{ width: 56, height: 56, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#EFF1F5", borderRadius: 10 }}>
                     <Figure frames={resolveFrames(e)} color={g.color} size={52} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 11, letterSpacing: 1.5, color: g.color, fontWeight: 700, textTransform: "uppercase" }}>{g.label}</div>
                     <div style={{ fontFamily: DISPLAY, fontSize: 20, fontWeight: 600, letterSpacing: 0.5 }}>{e.name}</div>
                   </div>
-                  <div style={{ fontSize: 13, color: "#8A93A3", flexShrink: 0 }}>
+                  <div style={{ fontSize: 13, color: "#6C7686", flexShrink: 0 }}>
                     {mode === "hiit" ? `${hiit[0]}s` : e.type === "time" ? `${e.secs}s` : `×${workout.reps}`}
                   </div>
                 </div>
                 {open && (
                   <div style={{ marginTop: 12, display: "flex", gap: 14, alignItems: "center" }}>
                     <Figure frames={resolveFrames(e)} color={g.color} size={120} />
-                    <div style={{ fontSize: 14, lineHeight: 1.5, color: "#C6CDD8" }}>{e.cue}</div>
+                    <div style={{ fontSize: 14, lineHeight: 1.5, color: "#3D4756" }}>{e.cue}</div>
                   </div>
                 )}
               </div>
@@ -707,13 +781,13 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
         <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ fontSize: 10, letterSpacing: 1.5, color: "#5C6575", fontWeight: 700 }}>FOCUS</span>
+            <span style={{ fontSize: 10, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>FOCUS</span>
             {["balanced", ...Object.keys(GROUPS)].map((g) => (
               <button key={g} onClick={() => setEmphasis(g)}
                 style={{
                   ...S.pill, padding: "6px 12px", fontSize: 12,
-                  background: emphasis === g ? (GROUPS[g] ? GROUPS[g].color : "#E8EBF0") : "#232A35",
-                  color: emphasis === g ? "#14181F" : "#C6CDD8",
+                  background: emphasis === g ? (GROUPS[g] ? GROUPS[g].color : "#1B2430") : "#E4E7EC",
+                  color: emphasis === g ? (GROUPS[g] ? "#1B2430" : "#F5F6F8") : "#3D4756",
                 }}>
                 {GROUPS[g] ? GROUPS[g].label.toLowerCase() : "balanced"}
               </button>
@@ -722,19 +796,19 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
             {["circuit", "hiit"].map((m) => (
               <button key={m} onClick={() => setMode(m)}
-                style={{ ...S.pill, background: mode === m ? "#E8EBF0" : "#232A35", color: mode === m ? "#14181F" : "#C6CDD8", textTransform: "uppercase", letterSpacing: 1 }}>
+                style={{ ...S.pill, background: mode === m ? "#1B2430" : "#E4E7EC", color: mode === m ? "#F5F6F8" : "#3D4756", textTransform: "uppercase", letterSpacing: 1 }}>
                 {m}
               </button>
             ))}
             {[1, 2, 3].map((r) => (
               <button key={r} onClick={() => setRounds(r)}
-                style={{ ...S.pill, background: rounds === r ? "#E8EBF0" : "#232A35", color: rounds === r ? "#14181F" : "#C6CDD8" }}>
+                style={{ ...S.pill, background: rounds === r ? "#1B2430" : "#E4E7EC", color: rounds === r ? "#F5F6F8" : "#3D4756" }}>
                 {r} round{r > 1 ? "s" : ""}
               </button>
             ))}
           </div>
           <button onClick={start} style={S.startBtn}>START WORKOUT</button>
-          <div style={{ textAlign: "center", fontSize: 12, color: "#5C6575" }}>
+          <div style={{ textAlign: "center", fontSize: 12, color: "#9AA3B0" }}>
             Same day = same workout, drawn from the full library. Tap an exercise for form.
           </div>
         </div>
@@ -748,7 +822,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       <div style={{ ...S.app, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 24, textAlign: "center" }}>
         <style>{FONT_CSS}</style>
         <div style={{ fontFamily: DISPLAY, fontSize: 48, fontWeight: 700, letterSpacing: 2 }}>DONE</div>
-        <div style={{ color: "#8A93A3" }}>
+        <div style={{ color: "#6C7686" }}>
           {lastEntry
             ? <>{lastEntry.exDone} sets · {lastEntry.totalReps} reps{lastEntry.totalSecs ? ` · ${Math.round(lastEntry.totalSecs / 60)}min timed` : ""} · streak {calcStreak(history)}d</>
             : <>{rounds} round{rounds > 1 ? "s" : ""} · {exList.length} exercises · streak {calcStreak(history)}d</>}
@@ -758,7 +832,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <button onClick={() => setScreen("home")} style={{ ...S.startBtn, width: "auto", padding: "14px 32px" }}>BACK</button>
-          <button onClick={() => setScreen("stats")} style={{ ...S.startBtn, width: "auto", padding: "14px 32px", background: "#232A35", color: "#E8EBF0" }}>STATS</button>
+          <button onClick={() => setScreen("stats")} style={{ ...S.startBtn, width: "auto", padding: "14px 32px", background: "#E4E7EC", color: "#1B2430" }}>STATS</button>
         </div>
       </div>
     );
@@ -767,6 +841,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   /* ---------- PLAYER ---------- */
   const g = GROUPS[ex.grp];
   const isRest = phase === "rest";
+  const lastRec = sessionLogRef.current[sessionLogRef.current.length - 1];
   const nextEx = idx + 1 < exList.length ? exList[idx + 1] : round < rounds ? exList[0] : null;
   const shown = isRest && nextEx ? nextEx : ex;
   const shownG = GROUPS[shown.grp];
@@ -779,7 +854,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       <style>{FONT_CSS}</style>
       <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button onClick={quitWorkout} style={S.ghostBtn}>✕ end</button>
-        <div style={{ fontSize: 13, color: "#8A93A3", letterSpacing: 1 }}>
+        <div style={{ fontSize: 13, color: "#6C7686", letterSpacing: 1 }}>
           ROUND {round}/{rounds} · {idx + 1}/{exList.length}
         </div>
         <button onClick={() => (isRest ? startNext() : advance())} style={S.ghostBtn}>skip ›</button>
@@ -791,32 +866,38 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         </div>
         <div style={{ fontFamily: DISPLAY, fontSize: 30, fontWeight: 700, letterSpacing: 0.5 }}>{shown.name}</div>
 
+        {isRest && mode === "hiit" && micOn && lastRec && lastRec.unit === "reps" && (
+          <div style={{ fontSize: 13, fontWeight: 600, color: heard != null ? "#2FA671" : "#B47E10" }}>
+            {heard != null ? `Heard ${heard} reps — logged ✓` : "🎤 Say how many reps you got"}
+          </div>
+        )}
+
         {isRest || mode === "hiit" || ex.type === "time" ? (
-          <Ring total={total} left={timeLeft} color={isRest ? "#8A93A3" : g.color}>
+          <Ring total={total} left={timeLeft} color={isRest ? "#6C7686" : g.color}>
             <div style={{ fontFamily: DISPLAY, fontSize: 64, fontWeight: 700, lineHeight: 1 }}>{timeLeft}</div>
-            <div style={{ fontSize: 12, color: "#8A93A3", letterSpacing: 1 }}>
+            <div style={{ fontSize: 12, color: "#6C7686", letterSpacing: 1 }}>
               {isRest ? "REST" : mode === "hiit" && ex.type === "reps" ? "MAX REPS" : "SECONDS"}
             </div>
           </Ring>
         ) : (
           <Ring total={workout.reps} left={workout.reps - rep} color={g.color}>
             <div style={{ fontFamily: DISPLAY, fontSize: 64, fontWeight: 700, lineHeight: 1, color: g.color }}>{rep}</div>
-            <div style={{ fontSize: 12, color: "#8A93A3", letterSpacing: 1 }}>OF {workout.reps} REPS</div>
+            <div style={{ fontSize: 12, color: "#6C7686", letterSpacing: 1 }}>OF {workout.reps} REPS</div>
           </Ring>
         )}
 
         <Figure frames={resolveFrames(shown)} color={shownG.color} size={160} />
-        <div style={{ fontSize: 14, lineHeight: 1.5, color: "#C6CDD8", maxWidth: 420 }}>{shown.cue}</div>
+        <div style={{ fontSize: 14, lineHeight: 1.5, color: "#3D4756", maxWidth: 420 }}>{shown.cue}</div>
 
         {!isRest && (
           nextEx ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#1B212B", borderRadius: 10, padding: "6px 14px", marginTop: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#FFFFFF", borderRadius: 10, padding: "6px 14px", marginTop: 6 }}>
               <Figure frames={resolveFrames(nextEx)} color={GROUPS[nextEx.grp].color} size={40} />
-              <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#5C6575", fontWeight: 700 }}>UP NEXT</div>
+              <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>UP NEXT</div>
               <div style={{ fontFamily: DISPLAY, fontSize: 17, fontWeight: 600 }}>{nextEx.name}</div>
             </div>
           ) : (
-            <div style={{ fontSize: 11, letterSpacing: 1.5, color: "#5C6575", marginTop: 6 }}>LAST ONE — EMPTY THE TANK</div>
+            <div style={{ fontSize: 11, letterSpacing: 1.5, color: "#9AA3B0", marginTop: 6 }}>LAST ONE — EMPTY THE TANK</div>
           )
         )}
       </div>
@@ -826,7 +907,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           <button onClick={advance} style={S.startBtn}>DONE — NEXT</button>
         )}
         {isRest && (
-          <button onClick={startNext} style={{ ...S.startBtn, background: "#232A35", color: "#E8EBF0" }}>SKIP REST</button>
+          <button onClick={startNext} style={{ ...S.startBtn, background: "#E4E7EC", color: "#1B2430" }}>SKIP REST</button>
         )}
       </div>
     </div>
