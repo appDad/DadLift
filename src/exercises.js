@@ -226,8 +226,24 @@ export const BUILTIN = [
   { id: "mbs", grp: "chest", name: "Ball Squeeze Press-Out", type: "reps", pose: "chestSqueeze", cue: "Crush the ball between your palms at chest height, press it straight out, pull it back in. Never stop crushing." },
 ];
 
+/* equipment tags: "db" dumbbells, "ball" med ball, untagged = bodyweight only */
+const EQUIP_TAGS = {
+  bor: "db", sar: "db", ren: "db", pov: "db", rdl: "db", rfl: "db", shg: "db",
+  ohp: "db", arn: "db", pp: "db", lat: "db", scp: "db", upr: "db",
+  cur: "db", ham: "db", zot: "db", rcu: "db", oht: "db", skc: "db", kb: "db",
+  sb: "db", ppt: "db", fp: "db", fly: "db", sqp: "db",
+  frr: "ball", hal: "ball", cgp: "ball", rt: "ball", slm: "ball", wsu: "ball",
+  db: "ball", vup: "ball", wc: "ball", mbs: "ball",
+};
+BUILTIN.forEach((e) => { if (EQUIP_TAGS[e.id]) e.eq = EQUIP_TAGS[e.id]; });
+
+export const EQUIPMENT = {
+  db: { label: "dumbbells" },
+  ball: { label: "med ball" },
+};
+
 /* ============ structured prompt for adding exercises via any LLM ============ */
-export const ADD_PROMPT = `Generate a JSON array of exercises for my workout app. Equipment: dumbbells and a medicine ball only. Follow this schema exactly and reply with ONLY the JSON, no markdown fences:
+const ADD_PROMPT_BASE = `Generate a JSON array of exercises for my workout app. Equipment available: __EQUIP__. Follow this schema exactly and reply with ONLY the JSON, no markdown fences:
 
 [{
   "id": "short_unique_id",
@@ -235,6 +251,7 @@ export const ADD_PROMPT = `Generate a JSON array of exercises for my workout app
   "grp": "back" | "chest" | "shoulders" | "arms" | "core",
   "type": "reps" | "time",
   "secs": 40,                    // only if type is "time"
+  "eq": "db" | "ball" | "<equipment name>",  // what it needs — OMIT the field entirely if bodyweight-only
   "cue": "One or two sentences of plain-language form instruction.",
   "frames": [FRAME_A, FRAME_B]   // start and end position stick figures
 }]
@@ -252,6 +269,14 @@ Conventions from existing figures: standing figures have head near [50,14], tors
 
 Generate N exercises for muscle group(s): X.`;
 
+export function buildAddPrompt(allEx, equipNames) {
+  return (
+    ADD_PROMPT_BASE.replace("__EQUIP__", ["bodyweight", ...equipNames].join(", ")) +
+    `\n\nAlready in the library — do NOT generate these or near-duplicates of them:\n` +
+    allEx.map((e) => e.name).join(", ")
+  );
+}
+
 /* ============ exercise validation ============ */
 export function validateExercise(e) {
   const errs = [];
@@ -260,6 +285,7 @@ export function validateExercise(e) {
   if (!GROUPS[e.grp]) errs.push(`grp must be one of: ${Object.keys(GROUPS).join(", ")}`);
   if (!["reps", "time"].includes(e.type)) errs.push("type must be reps|time");
   if (e.type === "time" && !(e.secs > 0)) errs.push("time type needs secs");
+  if (e.eq != null && (typeof e.eq !== "string" || !e.eq.trim())) errs.push("eq must be an equipment name string or omitted");
   if (!e.cue) errs.push("missing cue");
   const frames = e.frames || POSES[e.pose];
   if (!Array.isArray(frames) || frames.length !== 2) errs.push("needs frames[2] (or a valid pose key)");

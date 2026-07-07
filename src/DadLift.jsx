@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { loadJSON, saveJSON } from "./storage";
 import { coachModel } from "./firebase";
-import { POSES, GROUPS, BUILTIN, ADD_PROMPT, validateExercise, resolveFrames } from "./exercises";
+import { POSES, GROUPS, BUILTIN, EQUIPMENT, buildAddPrompt, validateExercise, resolveFrames } from "./exercises";
+import { loadCommunity, publishExercise, unpublishExercise } from "./community";
 import { styles, DISPLAY, FONT_CSS } from "./theme";
 import Stats from "./Stats.jsx";
 import Users from "./Users.jsx";
@@ -247,9 +248,16 @@ function Stepper({ label, value, unit, min, max, step, onChange }) {
   );
 }
 
-function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, micOn, setMicOn, onClearHistory, onBack, userEmail, onSignOut }) {
+function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, micOn, setMicOn, customEquip, onAddEquip, onRemoveEquip, onClearHistory, onBack, userEmail, onSignOut }) {
   const S = styles;
   const [armClear, setArmClear] = useState(false); // two-tap confirm for the destructive bit
+  const [newEquip, setNewEquip] = useState("");
+  const addEquip = () => {
+    const name = newEquip.trim().toLowerCase();
+    if (!name) return;
+    onAddEquip(name);
+    setNewEquip("");
+  };
   return (
     <div style={S.app}>
       <style>{FONT_CSS}</style>
@@ -280,6 +288,37 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
             {voiceOn ? "ON" : "OFF"}
           </button>
         </div>
+        <div style={S.settingsLabel}>EQUIPMENT</div>
+        <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontSize: 13, color: "#6C7686", lineHeight: 1.4 }}>
+            Dumbbells and med ball are built in. Add anything else you own — kettlebell,
+            bands, pull-up bar… — then tag exercises with it when importing. Toggle what's
+            on hand from the home screen.
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              value={newEquip}
+              onChange={(e) => setNewEquip(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addEquip()}
+              placeholder="e.g. kettlebell"
+              style={{
+                flex: 1, boxSizing: "border-box", background: "#EFF1F5", color: "#1B2430",
+                border: "1px solid #DDE2E9", borderRadius: 10, padding: "10px 12px", fontSize: 14,
+              }}
+            />
+            <button onClick={addEquip} style={{ ...S.pill, background: "#1B2430", color: "#F5F6F8" }}>ADD</button>
+          </div>
+          {customEquip.length > 0 && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {customEquip.map((k) => (
+                <span key={k} style={{ ...S.pill, padding: "6px 10px", fontSize: 12, background: "#E4E7EC", color: "#3D4756", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  {k}
+                  <button onClick={() => onRemoveEquip(k)} style={{ border: "none", background: "none", color: "#E85D5D", cursor: "pointer", fontSize: 14, padding: 0 }}>✕</button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
         <div style={S.settingsLabel}>DATA</div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", borderRadius: 12, padding: "12px 14px" }}>
           <div style={{ fontSize: 14, color: "#3D4756" }}>
@@ -306,7 +345,7 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
 }
 
 /* ============ library screen ============ */
-function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate }) {
+function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, communityBy, onHide, equipNames }) {
   const [tab, setTab] = useState("browse"); // browse | add | export
   const [pasteVal, setPasteVal] = useState("");
   const [msg, setMsg] = useState(null);
@@ -372,18 +411,25 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate }) {
               </div>
               {allEx.filter((e) => e.grp === g).map((e) => {
                 const isCustom = custom.some((c) => c.id === e.id);
+                const commBy = !isCustom && communityBy[e.id];
                 return (
                   <div key={e.id} style={{ ...S.card, marginBottom: 6, display: "flex", alignItems: "center", gap: 10 }}>
                     <Figure frames={resolveFrames(e)} color={GROUPS[g].color} size={44} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontFamily: DISPLAY, fontSize: 17, fontWeight: 600 }}>
                         {e.name} {isCustom && <span style={{ fontSize: 10, color: "#6C7686", letterSpacing: 1 }}>CUSTOM</span>}
+                        {commBy && <span style={{ fontSize: 10, color: "#9B7EDE", letterSpacing: 1 }}>COMMUNITY · {String(commBy).split("@")[0]}</span>}
                       </div>
-                      <div style={{ fontSize: 12, color: "#6C7686" }}>{e.type === "time" ? `${e.secs}s hold/work` : "rep-counted"}</div>
+                      <div style={{ fontSize: 12, color: "#6C7686" }}>
+                        {e.type === "time" ? `${e.secs}s hold/work` : "rep-counted"} · {e.eq ? (EQUIPMENT[e.eq] ? EQUIPMENT[e.eq].label : e.eq) : "bodyweight"}
+                      </div>
                     </div>
                     <Thumbs value={ratings[e.id] || 0} onChange={(v) => onRate(e.id, v)} />
                     {isCustom && (
                       <button onClick={() => onRemove(e.id)} style={{ ...S.ghostBtn, color: "#E85D5D" }}>remove</button>
+                    )}
+                    {commBy && (
+                      <button onClick={() => onHide(e.id)} style={{ ...S.ghostBtn, color: "#E85D5D" }}>hide</button>
                     )}
                   </div>
                 );
@@ -396,9 +442,9 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate }) {
       {tab === "add" && (
         <div style={{ padding: "0 16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ fontSize: 13, color: "#3D4756", lineHeight: 1.5 }}>
-            Copy the prompt, give it to Claude or Gemini with the muscle group and count you want, then paste the JSON below. Paste several batches at once if you want — duplicates (by id or name) are skipped automatically, everything valid gets added.
+            Copy the prompt, give it to Claude or Gemini with the muscle group and count you want, then paste the JSON below. The prompt already lists every exercise in your library so you won't get duplicates. Anything valid gets added — and shared to the community for the other DadLifters.
           </div>
-          <button onClick={() => copyText(ADD_PROMPT, "prompt")} style={{ ...S.startBtn, fontSize: 16, padding: "12px 0" }}>
+          <button onClick={() => copyText(buildAddPrompt(allEx, equipNames), "prompt")} style={{ ...S.startBtn, fontSize: 16, padding: "12px 0" }}>
             {copied === "prompt" ? "COPIED" : "COPY GENERATION PROMPT"}
           </button>
           <textarea value={pasteVal} onChange={(ev) => setPasteVal(ev.target.value)}
@@ -455,6 +501,10 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [micOn, setMicOn] = useState(true);
   const [heard, setHeard] = useState(null); // last spoken rep count picked up by the mic
   const [ratings, setRatings] = useState({}); // exercise id -> 1 | 0 | -1
+  const [community, setCommunity] = useState([]); // [{ex, by}] shared by other users
+  const [hiddenComm, setHiddenComm] = useState([]); // community ids hidden from MY instance
+  const [equip, setEquip] = useState({}); // equipment key -> false when I don't have it (default: have it)
+  const [customEquip, setCustomEquip] = useState([]); // user-added equipment names
   const savedRef = useRef(false);
   const recRef = useRef(null);
   // live counters mirrored into refs so advance() (called from timer closures) sees fresh values
@@ -462,10 +512,29 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const timeLeftRef = useRef(0);
   const sessionLogRef = useRef([]);
 
-  const allEx = useMemo(() => [...BUILTIN, ...customEx], [customEx]);
+  const allEx = useMemo(() => {
+    const taken = new Set([...BUILTIN, ...customEx].map((e) => e.id));
+    const comm = community
+      .filter((c) => !hiddenComm.includes(c.ex.id) && !taken.has(c.ex.id))
+      .map((c) => c.ex);
+    return [...BUILTIN, ...comm, ...customEx];
+  }, [customEx, community, hiddenComm]);
+  const communityBy = useMemo(
+    () => Object.fromEntries(community.map((c) => [c.ex.id, c.by])),
+    [community]
+  );
+  /* every equipment key we know about: built-ins, user-added, tags on library exercises */
+  const equipKeys = useMemo(() => {
+    const keys = [...Object.keys(EQUIPMENT), ...customEquip];
+    for (const e of allEx) if (e.eq && !keys.includes(e.eq)) keys.push(e.eq);
+    return keys;
+  }, [allEx, customEquip]);
+  const haveEquip = (key) => equip[key] !== false; // unknown gear defaults to available
+  /* only build workouts from exercises whose equipment is on hand */
+  const availEx = useMemo(() => allEx.filter((e) => !e.eq || haveEquip(e.eq)), [allEx, equip]);
   const workout = useMemo(
-    () => buildWorkout(today, allEx, emphasis === "balanced" ? null : emphasis, ratings),
-    [today, allEx, emphasis, ratings]
+    () => buildWorkout(today, availEx, emphasis === "balanced" ? null : emphasis, ratings),
+    [today, availEx, emphasis, ratings]
   );
   const exList = workout.exercises;
   const ex = exList[idx];
@@ -482,6 +551,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       setHistory(await loadJSON("history", []));
       setCustomEx(await loadJSON("customex", []));
       setRatings(await loadJSON("ratings", {}));
+      setHiddenComm(await loadJSON("hiddencomm", []));
+      loadCommunity().then(setCommunity);
       const s = await loadJSON("settings", null);
       if (s) {
         setRounds(s.rounds ?? 2); setTempo(s.tempo ?? 3); setVoiceOn(s.voiceOn ?? true);
@@ -489,14 +560,16 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         setRestSecs(s.restSecs ?? 15); setRoundRest(s.roundRest ?? 45);
         setEmphasis(s.emphasis ?? "balanced");
         setMicOn(s.micOn ?? true);
+        setEquip(s.equip ?? {});
+        setCustomEquip(s.customEquip ?? []);
       }
       setLoaded(true);
     })();
   }, []);
   useEffect(() => {
     if (!loaded) return;
-    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn }, { debounce: 600 });
-  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn]);
+    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn, equip, customEquip }, { debounce: 600 });
+  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn, equip, customEquip]);
 
   /* screen wake lock while working out — counting used to die when the phone locked */
   useEffect(() => {
@@ -534,11 +607,20 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     const next = [...customEx, ...arr];
     setCustomEx(next);
     saveJSON("customex", next);
+    // share with the community — best-effort, tagged with the contributor
+    arr.forEach((e) => publishExercise(e, (user.email || "").toLowerCase()));
   };
   const removeCustom = (id) => {
     const next = customEx.filter((e) => e.id !== id);
     setCustomEx(next);
     saveJSON("customex", next);
+    unpublishExercise(id); // it was ours — pull it from the community too
+    setCommunity((prev) => prev.filter((c) => c.ex.id !== id));
+  };
+  const hideCommunity = (id) => {
+    const next = [...hiddenComm, id];
+    setHiddenComm(next);
+    saveJSON("hiddencomm", next);
   };
 
   /* listen for a spoken rep count (HIIT AMRAP sets) and write it into the session log */
@@ -774,12 +856,20 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
   if (screen === "library") {
     return <Library allEx={allEx} custom={customEx} onAdd={addCustom} onRemove={removeCustom}
-      ratings={ratings} onRate={rate} onBack={() => setScreen("home")} />;
+      ratings={ratings} onRate={rate} communityBy={communityBy} onHide={hideCommunity}
+      equipNames={equipKeys.filter(haveEquip).map((k) => (EQUIPMENT[k] ? EQUIPMENT[k].label : k))}
+      onBack={() => setScreen("home")} />;
   }
   if (screen === "settings") {
     return <Settings tempo={tempo} setTempo={setTempo} restSecs={restSecs} setRestSecs={setRestSecs}
       roundRest={roundRest} setRoundRest={setRoundRest} hiit={hiit} setHiit={setHiit}
       voiceOn={voiceOn} setVoiceOn={setVoiceOn} micOn={micOn} setMicOn={setMicOn}
+      customEquip={customEquip}
+      onAddEquip={(name) => { if (!customEquip.includes(name) && !EQUIPMENT[name]) setCustomEquip([...customEquip, name]); }}
+      onRemoveEquip={(name) => {
+        setCustomEquip(customEquip.filter((k) => k !== name));
+        const nextEquip = { ...equip }; delete nextEquip[name]; setEquip(nextEquip);
+      }}
       onClearHistory={clearHistory} onBack={() => setScreen("home")}
       userEmail={user.email} onSignOut={onSignOut} />;
   }
@@ -881,6 +971,31 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686" }}>{k}</div>
             </div>
           ))}
+        </div>
+
+        <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "10px 14px", margin: "0 16px 14px" }}>
+          <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, marginBottom: 8 }}>
+            TODAY'S EQUIPMENT — TAP WHAT YOU HAVE
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ ...S.pill, padding: "6px 12px", fontSize: 12, background: "#1B2430", color: "#F5F6F8", cursor: "default" }}>
+              bodyweight ✓
+            </span>
+            {equipKeys.map((k) => (
+              <button key={k} onClick={() => setEquip({ ...equip, [k]: haveEquip(k) ? false : true })}
+                style={{
+                  ...S.pill, padding: "6px 12px", fontSize: 12,
+                  background: haveEquip(k) ? "#1B2430" : "#E4E7EC",
+                  color: haveEquip(k) ? "#F5F6F8" : "#6C7686",
+                  textDecoration: haveEquip(k) ? "none" : "line-through",
+                }}>
+                {(EQUIPMENT[k] ? EQUIPMENT[k].label : k)}{haveEquip(k) ? " ✓" : ""}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 10, color: "#9AA3B0", marginTop: 6 }}>
+            {availEx.length} of {allEx.length} exercises fit today's gear. Add new equipment in settings.
+          </div>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px" }}>

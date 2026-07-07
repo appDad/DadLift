@@ -25,6 +25,15 @@ service cloud.firestore {
       allow read, write: if isAllowed() && request.auth.uid == uid;
     }
 
+    // Shared exercise pool. Anyone on the roster can read and contribute;
+    // only the original contributor or the admin can overwrite or delete.
+    match /community/{exId} {
+      allow read: if isAllowed();
+      allow create: if isAllowed() && request.resource.data.by == userEmail();
+      allow update, delete: if isAllowed()
+        && (isAdmin() || resource.data.by == userEmail());
+    }
+
     // Roster of allowed emails. Users may check their own entry; only admin manages it.
     match /allowlist/{email} {
       allow get: if signedIn() && email == userEmail();
