@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { loadJSON, saveJSON } from "./storage";
 import { coachModel } from "./firebase";
-import { POSES, GROUPS, BUILTIN, EQUIPMENT, DEFAULT_EQUIP, normalizeEquip, extendEquipment, equipSlug, buildAddPrompt, validateExercise, resolveFrames } from "./exercises";
+import { POSES, GROUPS, BUILTIN, EQUIPMENT, DEFAULT_EQUIP, normalizeEquip, inferEquip, extendEquipment, equipSlug, buildAddPrompt, validateExercise, resolveFrames } from "./exercises";
 import { loadEquipExtensions, saveEquipExtensions } from "./catalog";
 import { loadCommunity, publishExercise, unpublishExercise } from "./community";
 import { ymd, calcStreak } from "./summary";
@@ -391,7 +391,7 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
 }
 
 /* ============ library screen ============ */
-function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, communityBy, onHide, ownedEquip }) {
+function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, communityBy, onHide, ownedEquip, onSetEq }) {
   const [tab, setTab] = useState("browse"); // browse | add | export
   const [pasteVal, setPasteVal] = useState("");
   const [msg, setMsg] = useState(null);
@@ -423,6 +423,9 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, comm
       if (e && e.eq != null) {
         const key = normalizeEquip(e.eq);
         if (key) e.eq = key;
+      } else if (e) {
+        const guess = inferEquip(e);
+        if (guess) e.eq = guess; // untagged import — infer from name/cue
       }
       const errs = validateExercise(e);
       if (ids.has(e.id)) errs.push(`duplicate id "${e.id}"`);
@@ -481,8 +484,22 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, comm
                         {e.name} {isCustom && <span style={{ fontSize: 10, color: "#6C7686", letterSpacing: 1 }}>CUSTOM</span>}
                         {commBy && <span style={{ fontSize: 10, color: "#9B7EDE", letterSpacing: 1 }}>COMMUNITY · {String(commBy).split("@")[0]}</span>}
                       </div>
-                      <div style={{ fontSize: 12, color: "#6C7686" }}>
-                        {e.type === "time" ? `${e.secs}s hold/work` : "rep-counted"} · {e.eq ? (EQUIPMENT[e.eq] ? EQUIPMENT[e.eq].label : e.eq) : "bodyweight"}
+                      <div style={{ fontSize: 12, color: "#6C7686", display: "flex", alignItems: "center", gap: 4 }}>
+                        {e.type === "time" ? `${e.secs}s hold/work` : "rep-counted"} ·
+                        {isCustom ? (
+                          <select
+                            value={e.eq || ""}
+                            onClick={(ev) => ev.stopPropagation()}
+                            onChange={(ev) => onSetEq(e.id, ev.target.value || null)}
+                            style={{ border: "1px solid #DDE2E9", borderRadius: 6, background: "#EFF1F5", color: "#3D4756", fontSize: 11, padding: "2px 4px" }}>
+                            <option value="">bodyweight</option>
+                            {Object.keys(EQUIPMENT).map((k) => (
+                              <option key={k} value={k}>{EQUIPMENT[k].label}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span>{e.eq ? (EQUIPMENT[e.eq] ? EQUIPMENT[e.eq].label : e.eq) : "bodyweight"}</span>
+                        )}
                       </div>
                     </div>
                     <Thumbs value={ratings[e.id] || 0} onChange={(v) => onRate(e.id, v)} />
@@ -583,8 +600,15 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     const comm = community
       .filter((c) => !hiddenComm.includes(c.ex.id) && !taken.has(c.ex.id))
       .map((c) => c.ex);
-    return [...BUILTIN, ...comm, ...customEx];
-  }, [customEx, community, hiddenComm]);
+    // imports that arrived without an eq tag get one inferred from name/cue,
+    // otherwise "dumbbell" exercises sail through the bodyweight filter
+    const tagEq = (e) => {
+      if (e.eq) return e;
+      const g = inferEquip(e);
+      return g ? { ...e, eq: g } : e;
+    };
+    return [...BUILTIN, ...comm.map(tagEq), ...customEx.map(tagEq)];
+  }, [customEx, community, hiddenComm, extEquip]);
   const communityBy = useMemo(
     () => Object.fromEntries(community.map((c) => [c.ex.id, c.by])),
     [community]
@@ -736,6 +760,13 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     const next = [...hiddenComm, id];
     setHiddenComm(next);
     saveJSON("hiddencomm", next);
+  };
+  const setCustomEq = (id, eq) => {
+    const next = customEx.map((e) => (e.id === id ? { ...e, eq: eq || undefined } : e));
+    setCustomEx(next);
+    saveJSON("customex", next);
+    const changed = next.find((e) => e.id === id);
+    if (changed) publishExercise(changed, (user.email || "").toLowerCase()); // keep the shared copy in sync
   };
 
   /* listen for a spoken rep count (HIIT AMRAP sets) and write it into the session log */
@@ -973,7 +1004,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   if (screen === "library") {
     return <Library allEx={allEx} custom={customEx} onAdd={addCustom} onRemove={removeCustom}
       ratings={ratings} onRate={rate} communityBy={communityBy} onHide={hideCommunity}
-      ownedEquip={equipKeys.filter(haveEquip)}
+      ownedEquip={equipKeys.filter(haveEquip)} onSetEq={setCustomEq}
       onBack={() => setScreen("home")} />;
   }
   if (screen === "settings") {
@@ -1172,17 +1203,21 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               </button>
             ))}
           </div>
-          <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontSize: 10, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>MODE</span>
             {["circuit", "hiit"].map((m) => (
               <button key={m} onClick={() => setMode(m)}
                 style={{ ...S.pill, background: mode === m ? "#1B2430" : "#E4E7EC", color: mode === m ? "#F5F6F8" : "#3D4756", textTransform: "uppercase", letterSpacing: 1 }}>
                 {m}
               </button>
             ))}
+          </div>
+          <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontSize: 10, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>ROUNDS</span>
             {[1, 2, 3].map((r) => (
               <button key={r} onClick={() => setRounds(r)}
-                style={{ ...S.pill, background: rounds === r ? "#1B2430" : "#E4E7EC", color: rounds === r ? "#F5F6F8" : "#3D4756" }}>
-                {r} round{r > 1 ? "s" : ""}
+                style={{ ...S.pill, background: rounds === r ? "#5B8DEF" : "#E4E7EC", color: rounds === r ? "#FFFFFF" : "#3D4756", fontWeight: 700 }}>
+                {r}
               </button>
             ))}
           </div>

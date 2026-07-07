@@ -269,6 +269,23 @@ export function extendEquipment(extra) {
 }
 export const equipSlug = (label) => String(label).toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 24);
 
+/* best-effort equipment inference for exercises that arrived without an eq
+   tag — scans name + cue for catalog labels/aliases (most specific first) */
+export function inferEquip(e) {
+  const text = ` ${e.name || ""} ${e.cue || ""} `.toLowerCase();
+  const terms = [];
+  for (const [key, def] of Object.entries(EQUIPMENT)) {
+    for (const t of [def.label, ...(def.aliases || [])]) {
+      const term = t.toLowerCase();
+      if (term.length >= 4 && term !== "step") terms.push([term, key]); // skip too-generic words
+    }
+  }
+  terms.push(["dumbbell", "db"], ["ball", "ball"]); // generic singulars, checked by length order anyway
+  terms.sort((a, b) => b[0].length - a[0].length);
+  for (const [term, key] of terms) if (text.includes(term)) return key;
+  return null;
+}
+
 const normStr = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
 /* map any spelling/alias to its canonical catalog key, or null if unknown */
 export function normalizeEquip(input) {
