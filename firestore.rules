@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===== ADMIN EMAIL — keep in sync with ADMIN_EMAIL in src/firebase.js =====
+    function adminEmail() { return "egabel@gmail.com"; }
+
+    function signedIn() {
+      return request.auth != null && request.auth.token.email != null;
+    }
+    function userEmail() {
+      return request.auth.token.email.lower();
+    }
+    function isAdmin() {
+      return signedIn() && userEmail() == adminEmail();
+    }
+    // A user is allowed if they're the admin or their email is on the allowlist.
+    function isAllowed() {
+      return signedIn()
+        && (isAdmin() || exists(/databases/$(database)/documents/allowlist/$(userEmail())));
+    }
+
+    // Each user's private data (workout history, settings, custom exercises, login log)
+    match /users/{uid}/{doc=**} {
+      allow read, write: if isAllowed() && request.auth.uid == uid;
+    }
+
+    // Roster of allowed emails. Users may check their own entry; only admin manages it.
+    match /allowlist/{email} {
+      allow get: if signedIn() && email == userEmail();
+      allow list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}
