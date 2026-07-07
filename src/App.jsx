@@ -2,10 +2,7 @@ import React, { useState, useEffect } from "react";
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db, googleProvider, ADMIN_EMAIL } from "./firebase";
-import { loadJSON, saveJSON } from "./storage";
 import DadLift from "./DadLift.jsx";
-
-const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 const S = {
   splash: {
@@ -63,14 +60,6 @@ export default function App() {
       }
       if (dead) return;
       setAllowed(ok);
-      if (ok) {
-        // log one login per day — fuels the Stats screen
-        const logins = await loadJSON("logins", []);
-        const today = ymd(new Date());
-        if (!logins.includes(today)) {
-          saveJSON("logins", [...logins, today].slice(-400));
-        }
-      }
     })();
     return () => { dead = true; };
   }, [user]);

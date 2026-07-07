@@ -58,12 +58,17 @@ Live at **https://dadlift.web.app**
 
 ## Stats & logging
 
-- One login per day is recorded to `kv/logins` when the app opens.
-- Every completed workout writes a history entry:
-  `{ d, ts, rounds, reps, n, mode, exercises[], groups{}, totalReps }`
-  (reps only totalled in circuit mode — HIIT is AMRAP).
-- The **stats** screen charts workouts/week, exercises/week, days-opened/week,
-  muscle-group split, current/best streak, and recent sessions.
+- Every workout ends on an **editable summary** screen: each set is prefilled with what
+  the counter saw (HIIT rep sets are max-effort — you punch in the number) and can be
+  corrected before saving. Quitting early (✕ end) also lands there, crediting partial work.
+- Saved history entry:
+  `{ d, ts, rounds, reps, n, mode, exDone, totalReps, totalSecs, groups{}, exercises[] }`
+- The **stats** screen charts workouts/week, exercises/week, reps/week,
+  muscle-group split (sets actually completed), current/best streak, and recent sessions.
+- Home has a **FOCUS** picker (balanced or one muscle group). A focus day gives that
+  group 4 of the 8 daily slots. Same day + same focus = same workout.
+- The library includes bodyweight/calisthenics exercises (push-up variants, chair dips,
+  pike push-ups, mountain climbers, leg raises…) — no equipment required.
 
 ## Firebase console — already configured
 

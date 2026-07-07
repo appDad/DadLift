@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { loadJSON } from "./storage";
+import React, { useMemo } from "react";
 import { GROUPS } from "./exercises";
 import { styles, DISPLAY, FONT_CSS } from "./theme";
 import { ymd, calcStreak } from "./DadLift.jsx";
@@ -35,6 +34,9 @@ function bestStreakOf(days) {
   return best;
 }
 
+/* older entries assumed the full plan; newer ones carry what was actually done */
+const exDoneOf = (h) => h.exDone ?? (h.n || 0) * (h.rounds || 1);
+
 function BarChart({ title, weeks, counts, color }) {
   const max = Math.max(1, ...counts);
   return (
@@ -68,8 +70,6 @@ function BarChart({ title, weeks, counts, color }) {
 }
 
 export default function Stats({ history, onBack }) {
-  const [logins, setLogins] = useState([]);
-  useEffect(() => { loadJSON("logins", []).then(setLogins); }, []);
   const S = styles;
 
   const m = useMemo(() => {
@@ -77,41 +77,42 @@ export default function Stats({ history, onBack }) {
     const wIdx = Object.fromEntries(weeks.map((w, i) => [w, i]));
     const workoutsPerWeek = weeks.map(() => 0);
     const exercisesPerWeek = weeks.map(() => 0);
-    const loginsPerWeek = weeks.map(() => 0);
+    const repsPerWeek = weeks.map(() => 0);
     const groupTotals = {};
-    let totalEx = 0, totalReps = 0;
+    let totalEx = 0, totalReps = 0, totalSecs = 0;
 
     for (const h of history) {
-      totalEx += (h.n || 0) * (h.rounds || 1);
+      const exDone = exDoneOf(h);
+      totalEx += exDone;
       totalReps += h.totalReps || 0;
+      totalSecs += h.totalSecs || 0;
       const wk = wIdx[mondayOf(h.d)];
       if (wk !== undefined) {
         workoutsPerWeek[wk]++;
-        exercisesPerWeek[wk] += (h.n || 0) * (h.rounds || 1);
+        exercisesPerWeek[wk] += exDone;
+        repsPerWeek[wk] += h.totalReps || 0;
       }
+      // new entries count groups per completed set; legacy ones were per plan × rounds
+      const mult = h.exDone != null ? 1 : (h.rounds || 1);
       for (const [g, c] of Object.entries(h.groups || {})) {
-        groupTotals[g] = (groupTotals[g] || 0) + c * (h.rounds || 1);
+        groupTotals[g] = (groupTotals[g] || 0) + c * mult;
       }
-    }
-    for (const d of logins) {
-      const wk = wIdx[mondayOf(d)];
-      if (wk !== undefined) loginsPerWeek[wk]++;
     }
 
     return {
-      weeks, workoutsPerWeek, exercisesPerWeek, loginsPerWeek, groupTotals, totalEx, totalReps,
+      weeks, workoutsPerWeek, exercisesPerWeek, repsPerWeek, groupTotals, totalEx, totalReps, totalSecs,
       best: bestStreakOf(history.map((h) => h.d)),
       groupMax: Math.max(1, ...Object.values(groupTotals)),
     };
-  }, [history, logins]);
+  }, [history]);
 
   const bigStats = [
     ["WORKOUTS", history.length],
     ["STREAK", calcStreak(history) + "d"],
     ["BEST STREAK", m.best + "d"],
     ["EXERCISES", m.totalEx],
-    ["REPS COUNTED", m.totalReps],
-    ["DAYS OPENED", logins.length],
+    ["TOTAL REPS", m.totalReps],
+    ["TIMED WORK", Math.round(m.totalSecs / 60) + "m"],
   ];
 
   const recent = [...history].sort((a, b) => (a.d < b.d ? 1 : -1)).slice(0, 10);
@@ -136,11 +137,11 @@ export default function Stats({ history, onBack }) {
 
         <BarChart title="Workouts per week" weeks={m.weeks} counts={m.workoutsPerWeek} color="#46C98B" />
         <BarChart title="Exercises per week" weeks={m.weeks} counts={m.exercisesPerWeek} color="#5B8DEF" />
-        <BarChart title="Days opened per week" weeks={m.weeks} counts={m.loginsPerWeek} color="#F2B134" />
+        <BarChart title="Reps per week" weeks={m.weeks} counts={m.repsPerWeek} color="#E85D5D" />
 
         <div style={{ background: "#1B212B", borderRadius: 12, padding: 14 }}>
           <div style={{ fontSize: 11, letterSpacing: 1.5, color: "#8A93A3", fontWeight: 700, textTransform: "uppercase", marginBottom: 10 }}>
-            Muscle group split (exercise slots)
+            Muscle group split (sets completed)
           </div>
           {Object.keys(GROUPS).map((g) => {
             const c = m.groupTotals[g] || 0;
@@ -155,7 +156,7 @@ export default function Stats({ history, onBack }) {
             );
           })}
           <div style={{ fontSize: 10, color: "#5C6575", marginTop: 4 }}>
-            Counted per completed workout × rounds. Reps are only totalled in circuit mode (HIIT is AMRAP).
+            Counts what you confirm on the workout summary — including edited and HIIT max-effort sets.
           </div>
         </div>
 
@@ -172,7 +173,7 @@ export default function Stats({ history, onBack }) {
                 {new Date(h.d + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
               </div>
               <div style={{ color: "#8A93A3" }}>
-                {h.mode || "circuit"} · {h.rounds}r · {h.n} ex{h.totalReps ? ` · ${h.totalReps} reps` : ""}
+                {h.mode || "circuit"} · {exDoneOf(h)} sets{h.totalReps ? ` · ${h.totalReps} reps` : ""}
               </div>
             </div>
           ))}

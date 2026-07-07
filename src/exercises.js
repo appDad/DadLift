@@ -126,6 +126,27 @@ export const POSES = {
     { L: [[34, 64, 62, 64], [34, 64, 30, 84], [34, 64, 36, 84], [62, 64, 58, 84], [62, 64, 66, 84]], head: [30, 61], floor: true },
     { L: [[34, 64, 62, 64], [34, 64, 32, 84], [34, 64, 18, 58], [62, 64, 66, 84], [62, 64, 80, 58]], head: [30, 61], floor: true },
   ],
+  /* ---- bodyweight / calisthenics additions ---- */
+  pushup: [
+    { L: [[32, 58, 56, 68], [56, 68, 76, 84], [32, 58, 32, 84]], head: [28, 53], floor: true },
+    { L: [[32, 66, 56, 72], [56, 72, 76, 85], [32, 66, 27, 77], [27, 77, 32, 84]], head: [28, 61], floor: true },
+  ],
+  pikePushup: [
+    { L: [[34, 72, 52, 56], [52, 56, 72, 84], [34, 72, 28, 84], [34, 72, 33, 84]], head: [31, 77], floor: true },
+    { L: [[30, 78, 52, 56], [52, 56, 72, 84], [30, 78, 25, 84], [30, 78, 34, 84]], head: [27, 82], floor: true },
+  ],
+  dip: [
+    { L: [[42, 56, 42, 76], [42, 76, 66, 84], [42, 60, 33, 66], [33, 66, 33, 78]], head: [42, 50], floor: true },
+    { L: [[42, 62, 42, 80], [42, 80, 66, 86], [42, 64, 32, 68], [32, 68, 32, 82]], head: [42, 56], floor: true },
+  ],
+  legRaise: [
+    { L: [[30, 84, 58, 84], [58, 84, 80, 84], [32, 83, 24, 77]], head: [26, 80], floor: true },
+    { L: [[30, 84, 58, 84], [58, 84, 58, 58], [32, 83, 24, 77]], head: [26, 80], floor: true },
+  ],
+  shoulderTap: [
+    { L: [[32, 58, 56, 68], [56, 68, 76, 84], [32, 58, 30, 84], [32, 58, 36, 84]], head: [28, 53], floor: true },
+    { L: [[32, 58, 56, 68], [56, 68, 76, 84], [32, 58, 33, 84], [32, 58, 40, 62]], head: [28, 53], floor: true },
+  ],
 };
 
 /* ============ built-in exercise database ============ */
@@ -173,6 +194,15 @@ export const BUILTIN = [
   { id: "wc", grp: "core", name: "Med Ball Wood Chop", type: "reps", pose: "woodChop", cue: "Ball high over one shoulder. Chop diagonally down past the opposite hip, rotating through your core. Count is per side." },
   { id: "hh", grp: "core", name: "Hollow Hold", type: "time", secs: 30, pose: "hollowHold", cue: "On your back, arms overhead, legs straight. Lift shoulders and legs, lower back pressed down. Banana shape, hold." },
   { id: "bdg", grp: "core", name: "Bird Dog", type: "time", secs: 40, pose: "birdDog", cue: "On all fours. Extend opposite arm and leg to a straight line, hold a beat, switch. Hips level the whole time." },
+  /* ---- bodyweight / calisthenics (no equipment needed) ---- */
+  { id: "pu", grp: "arms", name: "Push-Up", type: "reps", pose: "pushup", cue: "Hands under shoulders, body one straight line. Chest to the floor, press up. No sagging hips." },
+  { id: "dpu", grp: "arms", name: "Diamond Push-Up", type: "reps", pose: "pushup", cue: "Hands together under your chest, index fingers and thumbs forming a diamond. Elbows tight — all triceps." },
+  { id: "dip", grp: "arms", name: "Chair Dip", type: "reps", pose: "dip", cue: "Hands on a sturdy chair edge behind you, legs out front. Bend elbows to 90°, press back up. Shoulders away from ears." },
+  { id: "ppu", grp: "shoulders", name: "Pike Push-Up", type: "reps", pose: "pikePushup", cue: "Hips high in an inverted V. Lower the top of your head toward the floor between your hands, press back up." },
+  { id: "pst", grp: "shoulders", name: "Plank Shoulder Tap", type: "time", secs: 40, pose: "shoulderTap", cue: "High plank. Tap your opposite shoulder without letting your hips rock. Alternate hands." },
+  { id: "pyr", grp: "back", name: "Prone Y Raise", type: "reps", pose: "superman", cue: "Face down, arms overhead in a Y, thumbs up. Lift arms and chest, squeeze your mid-back, lower slow." },
+  { id: "mc", grp: "core", name: "Mountain Climber", type: "time", secs: 40, pose: "mtnClimber", cue: "High plank. Drive your knees toward your chest in quick alternating steps. Hips stay level." },
+  { id: "lr", grp: "core", name: "Leg Raise", type: "reps", pose: "legRaise", cue: "Lie flat, legs straight, hands under your hips. Raise legs to vertical, lower slow without arching your back." },
 ];
 
 /* ============ structured prompt for adding exercises via any LLM ============ */
