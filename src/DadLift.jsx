@@ -396,6 +396,8 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, comm
   const [pasteVal, setPasteVal] = useState("");
   const [msg, setMsg] = useState(null);
   const [copied, setCopied] = useState(null);
+  const [gearOnly, setGearOnly] = useState(true); // hide exercises needing gear that's toggled off
+  const fitsGear = (e) => !e.eq || ownedEquip.includes(e.eq);
   const S = styles;
 
   const copyText = async (txt, which) => {
@@ -455,12 +457,20 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, comm
 
       {tab === "browse" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 16px 20px" }}>
-          {Object.keys(GROUPS).map((g) => (
+          <button onClick={() => setGearOnly(!gearOnly)}
+            style={{ ...S.pill, alignSelf: "flex-start", padding: "6px 12px", fontSize: 12, background: gearOnly ? "#1B2430" : "#E4E7EC", color: gearOnly ? "#F5F6F8" : "#3D4756" }}>
+            {gearOnly ? "showing my gear only ✓" : "showing everything"}
+          </button>
+          {Object.keys(GROUPS).map((g) => {
+            const groupAll = allEx.filter((e) => e.grp === g);
+            const shown = gearOnly ? groupAll.filter(fitsGear) : groupAll;
+            const hidden = groupAll.length - shown.length;
+            return (
             <div key={g}>
               <div style={{ fontSize: 11, letterSpacing: 1.5, color: GROUPS[g].color, fontWeight: 700, textTransform: "uppercase", margin: "10px 0 6px" }}>
-                {GROUPS[g].label} · {allEx.filter((e) => e.grp === g).length}
+                {GROUPS[g].label} · {shown.length}{hidden > 0 ? ` (+${hidden} hidden)` : ""}
               </div>
-              {allEx.filter((e) => e.grp === g).map((e) => {
+              {shown.map((e) => {
                 const isCustom = custom.some((c) => c.id === e.id);
                 const commBy = !isCustom && communityBy[e.id];
                 return (
@@ -486,7 +496,8 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, comm
                 );
               })}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
