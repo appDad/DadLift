@@ -34,6 +34,12 @@ service cloud.firestore {
         && (isAdmin() || resource.data.by == userEmail());
     }
 
+    // App-wide config (e.g. admin-added equipment catalog entries).
+    match /config/{docId} {
+      allow read: if isAllowed();
+      allow write: if isAdmin();
+    }
+
     // Public progress snapshots. Readable by anyone holding the unguessable
     // link token — that's the point of sharing. Only the owner manages theirs.
     match /shares/{shareId} {

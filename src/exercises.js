@@ -259,6 +259,16 @@ export const EQUIPMENT = {
 /* always-on defaults from the original app; everything else is opt-in */
 export const DEFAULT_EQUIP = ["db", "ball"];
 
+/* admin-managed catalog extensions (config/equipment doc) merge in at startup */
+export function extendEquipment(extra) {
+  for (const [k, v] of Object.entries(extra || {})) {
+    if (!EQUIPMENT[k] && v && v.label) {
+      EQUIPMENT[k] = { label: String(v.label), aliases: v.aliases || [], custom: true };
+    }
+  }
+}
+export const equipSlug = (label) => String(label).toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 24);
+
 const normStr = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
 /* map any spelling/alias to its canonical catalog key, or null if unknown */
 export function normalizeEquip(input) {

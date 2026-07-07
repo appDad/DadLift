@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { loadJSON, saveJSON } from "./storage";
 import { coachModel } from "./firebase";
-import { POSES, GROUPS, BUILTIN, EQUIPMENT, DEFAULT_EQUIP, normalizeEquip, buildAddPrompt, validateExercise, resolveFrames } from "./exercises";
+import { POSES, GROUPS, BUILTIN, EQUIPMENT, DEFAULT_EQUIP, normalizeEquip, extendEquipment, equipSlug, buildAddPrompt, validateExercise, resolveFrames } from "./exercises";
+import { loadEquipExtensions, saveEquipExtensions } from "./catalog";
 import { loadCommunity, publishExercise, unpublishExercise } from "./community";
 import { ymd, calcStreak } from "./summary";
 import { newShareId, shareUrl, publishSnapshot, removeSnapshot } from "./share";
@@ -238,9 +239,12 @@ function Stepper({ label, value, unit, min, max, step, onChange }) {
   );
 }
 
-function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, micOn, setMicOn, customEquip, onAddEquip, onRemoveEquip, focusEquip, onClearHistory, onBack, userEmail, onSignOut }) {
+function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, micOn, setMicOn, customEquip, onAddEquip, onRemoveEquip, focusEquip, isAdmin, extEquip, onAddCatalog, onRemoveCatalog, onClearHistory, onBack, userEmail, onSignOut }) {
   const S = styles;
   const [armClear, setArmClear] = useState(false); // two-tap confirm for the destructive bit
+  const [catLabel, setCatLabel] = useState("");
+  const [catAliases, setCatAliases] = useState("");
+  const [catMsg, setCatMsg] = useState(null);
   const equipRef = useRef(null);
   useEffect(() => {
     if (focusEquip && equipRef.current) equipRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -310,6 +314,57 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
             </div>
           )}
         </div>
+        {isAdmin && (
+          <>
+            <div style={S.settingsLabel}>CATALOG (ADMIN ONLY)</div>
+            <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ fontSize: 13, color: "#6C7686", lineHeight: 1.4 }}>
+                Add equipment to the shared catalog — every user gets it as a tap-to-add
+                option, and imports/prompts accept it. Aliases catch alternate spellings.
+              </div>
+              <input
+                value={catLabel}
+                onChange={(e) => setCatLabel(e.target.value)}
+                placeholder="equipment name — e.g. cable machine"
+                style={{
+                  boxSizing: "border-box", background: "#EFF1F5", color: "#1B2430",
+                  border: "1px solid #DDE2E9", borderRadius: 10, padding: "10px 12px", fontSize: 14,
+                }}
+              />
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  value={catAliases}
+                  onChange={(e) => setCatAliases(e.target.value)}
+                  placeholder="aliases, comma-separated (optional)"
+                  style={{
+                    flex: 1, boxSizing: "border-box", background: "#EFF1F5", color: "#1B2430",
+                    border: "1px solid #DDE2E9", borderRadius: 10, padding: "10px 12px", fontSize: 14,
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    const err = onAddCatalog(catLabel, catAliases);
+                    setCatMsg(err);
+                    if (!err) { setCatLabel(""); setCatAliases(""); }
+                  }}
+                  style={{ ...S.pill, background: "#1B2430", color: "#F5F6F8" }}>
+                  ADD
+                </button>
+              </div>
+              {catMsg && <div style={{ fontSize: 12, color: "#B47E10" }}>{catMsg}</div>}
+              {Object.keys(extEquip).length > 0 && (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {Object.entries(extEquip).map(([k, v]) => (
+                    <span key={k} style={{ ...S.pill, padding: "6px 10px", fontSize: 12, background: "#E4E7EC", color: "#3D4756", display: "inline-flex", alignItems: "center", gap: 8 }}>
+                      {v.label} <span style={{ color: "#9AA3B0" }}>({k})</span>
+                      <button onClick={() => onRemoveCatalog(k)} style={{ border: "none", background: "none", color: "#E85D5D", cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
         <div style={S.settingsLabel}>DATA</div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", borderRadius: 12, padding: "12px 14px" }}>
           <div style={{ fontSize: 14, color: "#3D4756" }}>
@@ -504,6 +559,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [share, setShare] = useState({ id: null, on: false }); // public progress page
   const [shareCopied, setShareCopied] = useState(false);
   const [settingsFocus, setSettingsFocus] = useState(null); // "equip" scrolls settings to that section
+  const [extEquip, setExtEquip] = useState({}); // admin-added catalog entries (config/equipment)
   const savedRef = useRef(false);
   const recRef = useRef(null);
   // live counters mirrored into refs so advance() (called from timer closures) sees fresh values
@@ -553,6 +609,9 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       setRatings(await loadJSON("ratings", {}));
       setHiddenComm(await loadJSON("hiddencomm", []));
       setShare(await loadJSON("share", { id: null, on: false }));
+      // merge admin catalog extensions BEFORE community loads — community
+      // exercises tagged with admin-added gear must pass validation
+      setExtEquip(await loadEquipExtensions());
       loadCommunity().then(setCommunity);
       const s = await loadJSON("settings", null);
       if (s) {
@@ -604,6 +663,28 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     saveJSON("history", []);
     saveJSON("logins", []); // stale key from the old visit tracking
     if (share.on && share.id) publishSnapshot(user.uid, firstName(), [], share.id);
+  };
+
+  /* ----- admin: extend the equipment catalog without code changes ----- */
+  const addCatalogEquip = (label, aliasesStr) => {
+    const clean = (label || "").trim().toLowerCase();
+    const key = equipSlug(clean);
+    if (!key) return "Give it a name first.";
+    if (EQUIPMENT[key]) return `"${EQUIPMENT[key].label}" is already in the catalog.`;
+    const entry = { label: clean, aliases: (aliasesStr || "").split(",").map((s) => s.trim()).filter(Boolean) };
+    const next = { ...extEquip, [key]: entry };
+    extendEquipment({ [key]: entry });
+    setExtEquip(next);
+    saveEquipExtensions(next);
+    return null;
+  };
+  const removeCatalogEquip = (key) => {
+    const next = { ...extEquip };
+    delete next[key];
+    if (EQUIPMENT[key] && EQUIPMENT[key].custom) delete EQUIPMENT[key];
+    setExtEquip(next);
+    saveEquipExtensions(next);
+    setCustomEquip(customEquip.filter((k) => k !== key));
   };
 
   /* ----- public progress page ----- */
@@ -895,6 +976,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         const nextEquip = { ...equip }; delete nextEquip[key]; setEquip(nextEquip);
       }}
       focusEquip={settingsFocus === "equip"}
+      isAdmin={isAdmin} extEquip={extEquip} onAddCatalog={addCatalogEquip} onRemoveCatalog={removeCatalogEquip}
       onClearHistory={clearHistory} onBack={() => { setSettingsFocus(null); setScreen("home"); }}
       userEmail={user.email} onSignOut={onSignOut} />;
   }
