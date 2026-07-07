@@ -19,7 +19,30 @@ const dateSeed = (d) => d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.g
 export const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 /* ============ daily workout builder ============ */
-function buildWorkout(date, allEx, emphasis) {
+/* thumbs bias the deterministic picker: 👍 3x weight, 👎 0.4x, neutral 1x */
+function weightedPick(pool, count, rng, ratings) {
+  const out = [];
+  const items = pool.slice();
+  while (out.length < count && items.length) {
+    let total = 0;
+    const w = items.map((e) => {
+      const r = ratings[e.id] || 0;
+      const wt = r > 0 ? 3 : r < 0 ? 0.4 : 1;
+      total += wt;
+      return wt;
+    });
+    let roll = rng() * total;
+    let pick = items.length - 1;
+    for (let i = 0; i < items.length; i++) {
+      roll -= w[i];
+      if (roll <= 0) { pick = i; break; }
+    }
+    out.push(items.splice(pick, 1)[0]);
+  }
+  return out;
+}
+
+function buildWorkout(date, allEx, emphasis, ratings = {}) {
   const rng = mulberry32(dateSeed(date));
   const groups = Object.keys(GROUPS);
   // 8 slots total: every group gets at least 1; a focus day gives that group 4,
@@ -38,15 +61,31 @@ function buildWorkout(date, allEx, emphasis) {
   }
   const picks = [];
   for (const g of groups) {
-    const pool = allEx.filter((e) => e.grp === g).slice();
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
-    picks.push(...pool.slice(0, counts[g]));
+    const pool = allEx.filter((e) => e.grp === g);
+    picks.push(...weightedPick(pool, counts[g], rng, ratings));
   }
   const reps = [10, 12, 15][Math.floor(rng() * 3)];
   return { exercises: picks, reps };
+}
+
+/* ============ thumbs rating control ============ */
+function Thumbs({ value, onChange, size = 15 }) {
+  return (
+    <div style={{ display: "flex", gap: 4, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+      {[[1, "👍"], [0, "–"], [-1, "👎"]].map(([v, icon]) => (
+        <button key={v} onClick={() => onChange(v)}
+          style={{
+            border: "none", borderRadius: 8, width: 30, height: 28, cursor: "pointer",
+            fontSize: v === 0 ? size + 2 : size, lineHeight: 1,
+            background: value === v ? (v > 0 ? "#D8F3E5" : v < 0 ? "#FBE2E2" : "#DDE2E9") : "#EFF1F5",
+            color: "#3D4756",
+            outline: value === v ? "2px solid " + (v > 0 ? "#2FA671" : v < 0 ? "#E85D5D" : "#6C7686") : "none",
+          }}>
+          {icon}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 /* ============ streak math ============ */
@@ -188,8 +227,9 @@ function Stepper({ label, value, unit, min, max, step, onChange }) {
   );
 }
 
-function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, micOn, setMicOn, onBack, userEmail, onSignOut }) {
+function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, micOn, setMicOn, onClearHistory, onBack, userEmail, onSignOut }) {
   const S = styles;
+  const [armClear, setArmClear] = useState(false); // two-tap confirm for the destructive bit
   return (
     <div style={S.app}>
       <style>{FONT_CSS}</style>
@@ -220,6 +260,21 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
             {voiceOn ? "ON" : "OFF"}
           </button>
         </div>
+        <div style={S.settingsLabel}>DATA</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", borderRadius: 12, padding: "12px 14px" }}>
+          <div style={{ fontSize: 14, color: "#3D4756" }}>
+            {armClear ? "Really wipe all workout history?" : "Clear workout history (stats start fresh)"}
+          </div>
+          <button
+            onClick={() => {
+              if (!armClear) { setArmClear(true); setTimeout(() => setArmClear(false), 4000); return; }
+              onClearHistory();
+              setArmClear(false);
+            }}
+            style={{ ...S.pill, background: armClear ? "#E85D5D" : "#E4E7EC", color: armClear ? "#FFFFFF" : "#E85D5D" }}>
+            {armClear ? "YES, WIPE IT" : "clear"}
+          </button>
+        </div>
         <div style={S.settingsLabel}>ACCOUNT</div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", borderRadius: 12, padding: "12px 14px" }}>
           <div style={{ fontSize: 13, color: "#6C7686", overflow: "hidden", textOverflow: "ellipsis" }}>{userEmail}</div>
@@ -231,7 +286,7 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
 }
 
 /* ============ library screen ============ */
-function Library({ allEx, custom, onAdd, onRemove, onBack }) {
+function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate }) {
   const [tab, setTab] = useState("browse"); // browse | add | export
   const [pasteVal, setPasteVal] = useState("");
   const [msg, setMsg] = useState(null);
@@ -306,6 +361,7 @@ function Library({ allEx, custom, onAdd, onRemove, onBack }) {
                       </div>
                       <div style={{ fontSize: 12, color: "#6C7686" }}>{e.type === "time" ? `${e.secs}s hold/work` : "rep-counted"}</div>
                     </div>
+                    <Thumbs value={ratings[e.id] || 0} onChange={(v) => onRate(e.id, v)} />
                     {isCustom && (
                       <button onClick={() => onRemove(e.id)} style={{ ...S.ghostBtn, color: "#E85D5D" }}>remove</button>
                     )}
@@ -375,8 +431,10 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [loaded, setLoaded] = useState(false);
   const [summaryRows, setSummaryRows] = useState([]);
   const [lastEntry, setLastEntry] = useState(null);
+  const [doneExList, setDoneExList] = useState([]); // snapshot for the DONE screen — rating changes re-roll the picker
   const [micOn, setMicOn] = useState(true);
   const [heard, setHeard] = useState(null); // last spoken rep count picked up by the mic
+  const [ratings, setRatings] = useState({}); // exercise id -> 1 | 0 | -1
   const savedRef = useRef(false);
   const recRef = useRef(null);
   // live counters mirrored into refs so advance() (called from timer closures) sees fresh values
@@ -386,8 +444,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
   const allEx = useMemo(() => [...BUILTIN, ...customEx], [customEx]);
   const workout = useMemo(
-    () => buildWorkout(today, allEx, emphasis === "balanced" ? null : emphasis),
-    [today, allEx, emphasis]
+    () => buildWorkout(today, allEx, emphasis === "balanced" ? null : emphasis, ratings),
+    [today, allEx, emphasis, ratings]
   );
   const exList = workout.exercises;
   const ex = exList[idx];
@@ -397,6 +455,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     (async () => {
       setHistory(await loadJSON("history", []));
       setCustomEx(await loadJSON("customex", []));
+      setRatings(await loadJSON("ratings", {}));
       const s = await loadJSON("settings", null);
       if (s) {
         setRounds(s.rounds ?? 2); setTempo(s.tempo ?? 3); setVoiceOn(s.voiceOn ?? true);
@@ -431,6 +490,19 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       try { lock && lock.release(); } catch (e) { /* already gone */ }
     };
   }, [screen]);
+
+  const rate = (id, v) => {
+    const next = { ...ratings };
+    if (v === 0) delete next[id]; else next[id] = v;
+    setRatings(next);
+    saveJSON("ratings", next);
+  };
+
+  const clearHistory = () => {
+    setHistory([]);
+    saveJSON("history", []);
+    saveJSON("logins", []); // stale key from the old visit tracking
+  };
 
   const addCustom = (arr) => {
     const next = [...customEx, ...arr];
@@ -486,7 +558,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
   const advance = () => {
     logDone();
-    if (mode === "hiit" && ex.type === "reps" && micOn) {
+    if (ex.type === "reps" && micOn) {
       // let the "Rest…" announcement finish, then open the mic for the rep count
       const slot = sessionLogRef.current.length - 1;
       setHeard(null);
@@ -569,6 +641,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     setHistory(newHist);
     saveJSON("history", newHist);
     setLastEntry(entry);
+    setDoneExList(exList);
     setScreen("done");
     const summary = `${entry.exDone} exercise sets, ${entry.totalReps} reps total (${entry.exercises.join(", ") || "nothing finished"})`;
     fetchCoachLine(newHist, summary).then(setCoachLine);
@@ -641,13 +714,14 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const week = history.filter((h) => (new Date() - new Date(h.d)) / 86400000 < 7).length;
 
   if (screen === "library") {
-    return <Library allEx={allEx} custom={customEx} onAdd={addCustom} onRemove={removeCustom} onBack={() => setScreen("home")} />;
+    return <Library allEx={allEx} custom={customEx} onAdd={addCustom} onRemove={removeCustom}
+      ratings={ratings} onRate={rate} onBack={() => setScreen("home")} />;
   }
   if (screen === "settings") {
     return <Settings tempo={tempo} setTempo={setTempo} restSecs={restSecs} setRestSecs={setRestSecs}
       roundRest={roundRest} setRoundRest={setRoundRest} hiit={hiit} setHiit={setHiit}
       voiceOn={voiceOn} setVoiceOn={setVoiceOn} micOn={micOn} setMicOn={setMicOn}
-      onBack={() => setScreen("home")}
+      onClearHistory={clearHistory} onBack={() => setScreen("home")}
       userEmail={user.email} onSignOut={onSignOut} />;
   }
   if (screen === "stats") {
@@ -830,6 +904,18 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         <div style={{ minHeight: 48, maxWidth: 380, fontSize: 16, lineHeight: 1.5, fontStyle: "italic" }}>
           {coachLine || "…"}
         </div>
+        <div style={{ width: "100%", maxWidth: 380, textAlign: "left" }}>
+          <div style={{ fontSize: 11, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, marginBottom: 8, textAlign: "center" }}>
+            RATE TODAY'S EXERCISES — FAVORITES SHOW UP MORE OFTEN
+          </div>
+          {doneExList.map((e) => (
+            <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 10, background: "#FFFFFF", borderRadius: 10, padding: "6px 12px", marginBottom: 5 }}>
+              <div style={{ width: 8, height: 8, borderRadius: 4, background: GROUPS[e.grp].color, flexShrink: 0 }} />
+              <div style={{ flex: 1, fontSize: 13 }}>{e.name}</div>
+              <Thumbs value={ratings[e.id] || 0} onChange={(v) => rate(e.id, v)} />
+            </div>
+          ))}
+        </div>
         <div style={{ display: "flex", gap: 10 }}>
           <button onClick={() => setScreen("home")} style={{ ...S.startBtn, width: "auto", padding: "14px 32px" }}>BACK</button>
           <button onClick={() => setScreen("stats")} style={{ ...S.startBtn, width: "auto", padding: "14px 32px", background: "#E4E7EC", color: "#1B2430" }}>STATS</button>
@@ -866,7 +952,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         </div>
         <div style={{ fontFamily: DISPLAY, fontSize: 30, fontWeight: 700, letterSpacing: 0.5 }}>{shown.name}</div>
 
-        {isRest && mode === "hiit" && micOn && lastRec && lastRec.unit === "reps" && (
+        {isRest && micOn && lastRec && lastRec.unit === "reps" && (
           <div style={{ fontSize: 13, fontWeight: 600, color: heard != null ? "#2FA671" : "#B47E10" }}>
             {heard != null ? `Heard ${heard} reps — logged ✓` : "🎤 Say how many reps you got"}
           </div>

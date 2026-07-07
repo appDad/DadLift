@@ -69,6 +69,11 @@ Live at **https://dadlift.web.app**
   group 4 of the 8 daily slots. Same day + same focus = same workout.
 - The library includes bodyweight/calisthenics exercises (push-up variants, chair dips,
   pike push-ups, mountain climbers, leg raises…) — no equipment required.
+- **Ratings**: thumbs up / neutral / down per exercise (DONE screen or library).
+  The daily picker weights them 3× / 1× / 0.4× — favorites show up more often.
+- After every rep-based set (circuit or HIIT), the mic listens during rest — say the
+  number you actually did and it overrides the auto-count (toggle in settings).
+- Settings → DATA → "clear" wipes workout history (two-tap confirm).
 
 ## Firebase console — already configured
 

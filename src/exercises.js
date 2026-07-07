@@ -208,6 +208,7 @@ export const BUILTIN = [
   { id: "wc", grp: "core", name: "Med Ball Wood Chop", type: "reps", pose: "woodChop", cue: "Ball high over one shoulder. Chop diagonally down past the opposite hip, rotating through your core. Count is per side." },
   { id: "hh", grp: "core", name: "Hollow Hold", type: "time", secs: 30, pose: "hollowHold", cue: "On your back, arms overhead, legs straight. Lift shoulders and legs, lower back pressed down. Banana shape, hold." },
   { id: "bdg", grp: "core", name: "Bird Dog", type: "time", secs: 40, pose: "birdDog", cue: "On all fours. Extend opposite arm and leg to a straight line, hold a beat, switch. Hips level the whole time." },
+  { id: "ibd", grp: "core", name: "Ipsilateral Bird Dog", type: "time", secs: 40, pose: "birdDog", cue: "On all fours. Raise your SAME-side arm and leg together, hold a beat, switch sides. Much harder to balance — brace hard." },
   /* ---- bodyweight / calisthenics (no equipment needed) ---- */
   { id: "pu", grp: "arms", name: "Push-Up", type: "reps", pose: "pushup", cue: "Hands under shoulders, body one straight line. Chest to the floor, press up. No sagging hips." },
   { id: "dpu", grp: "arms", name: "Diamond Push-Up", type: "reps", pose: "pushup", cue: "Hands together under your chest, index fingers and thumbs forming a diamond. Elbows tight — all triceps." },
