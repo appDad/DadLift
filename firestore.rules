@@ -34,6 +34,15 @@ service cloud.firestore {
         && (isAdmin() || resource.data.by == userEmail());
     }
 
+    // Public progress snapshots. Readable by anyone holding the unguessable
+    // link token — that's the point of sharing. Only the owner manages theirs.
+    match /shares/{shareId} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if isAllowed() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isAllowed() && resource.data.uid == request.auth.uid;
+    }
+
     // Roster of allowed emails. Users may check their own entry; only admin manages it.
     match /allowlist/{email} {
       allow get: if signedIn() && email == userEmail();

@@ -1,43 +1,9 @@
 import React, { useMemo } from "react";
 import { GROUPS } from "./exercises";
 import { styles, DISPLAY, FONT_CSS } from "./theme";
-import { ymd, calcStreak } from "./DadLift.jsx";
+import { computeSummary } from "./summary";
 
-/* week bucket = the Monday that starts that week */
-function mondayOf(dateStr) {
-  const d = new Date(dateStr + "T00:00:00");
-  const day = (d.getDay() + 6) % 7; // Mon=0 … Sun=6
-  d.setDate(d.getDate() - day);
-  return ymd(d);
-}
-function lastWeeks(n) {
-  const weeks = [];
-  const cur = new Date(mondayOf(ymd(new Date())) + "T00:00:00");
-  for (let i = 0; i < n; i++) {
-    weeks.unshift(ymd(cur));
-    cur.setDate(cur.getDate() - 7);
-  }
-  return weeks;
-}
-function bestStreakOf(days) {
-  const sorted = [...new Set(days)].sort();
-  let best = 0, run = 0, prev = null;
-  for (const d of sorted) {
-    if (prev) {
-      const p = new Date(prev + "T00:00:00");
-      p.setDate(p.getDate() + 1);
-      run = ymd(p) === d ? run + 1 : 1;
-    } else run = 1;
-    best = Math.max(best, run);
-    prev = d;
-  }
-  return best;
-}
-
-/* older entries assumed the full plan; newer ones carry what was actually done */
-const exDoneOf = (h) => h.exDone ?? (h.n || 0) * (h.rounds || 1);
-
-function BarChart({ title, weeks, counts, color }) {
+export function BarChart({ title, weeks, counts, color }) {
   const max = Math.max(1, ...counts);
   return (
     <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 14 }}>
@@ -69,53 +35,73 @@ function BarChart({ title, weeks, counts, color }) {
   );
 }
 
-export default function Stats({ history, onBack }) {
-  const S = styles;
-
-  const m = useMemo(() => {
-    const weeks = lastWeeks(12);
-    const wIdx = Object.fromEntries(weeks.map((w, i) => [w, i]));
-    const workoutsPerWeek = weeks.map(() => 0);
-    const exercisesPerWeek = weeks.map(() => 0);
-    const repsPerWeek = weeks.map(() => 0);
-    const groupTotals = {};
-    let totalEx = 0, totalReps = 0, totalSecs = 0;
-
-    for (const h of history) {
-      const exDone = exDoneOf(h);
-      totalEx += exDone;
-      totalReps += h.totalReps || 0;
-      totalSecs += h.totalSecs || 0;
-      const wk = wIdx[mondayOf(h.d)];
-      if (wk !== undefined) {
-        workoutsPerWeek[wk]++;
-        exercisesPerWeek[wk] += exDone;
-        repsPerWeek[wk] += h.totalReps || 0;
-      }
-      // new entries count groups per completed set; legacy ones were per plan × rounds
-      const mult = h.exDone != null ? 1 : (h.rounds || 1);
-      for (const [g, c] of Object.entries(h.groups || {})) {
-        groupTotals[g] = (groupTotals[g] || 0) + c * mult;
-      }
-    }
-
-    return {
-      weeks, workoutsPerWeek, exercisesPerWeek, repsPerWeek, groupTotals, totalEx, totalReps, totalSecs,
-      best: bestStreakOf(history.map((h) => h.d)),
-      groupMax: Math.max(1, ...Object.values(groupTotals)),
-    };
-  }, [history]);
-
+export function SummaryBody({ m }) {
   const bigStats = [
-    ["WORKOUTS", history.length],
-    ["STREAK", calcStreak(history) + "d"],
-    ["BEST STREAK", m.best + "d"],
-    ["EXERCISES", m.totalEx],
-    ["TOTAL REPS", m.totalReps],
-    ["TIMED WORK", Math.round(m.totalSecs / 60) + "m"],
+    ["WORKOUTS", m.totals.workouts],
+    ["STREAK", m.totals.streak + "d"],
+    ["BEST STREAK", m.totals.best + "d"],
+    ["EXERCISES", m.totals.totalEx],
+    ["TOTAL REPS", m.totals.totalReps],
+    ["TIMED WORK", Math.round(m.totals.totalSecs / 60) + "m"],
   ];
+  return (
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+        {bigStats.map(([k, v]) => (
+          <div key={k} style={{ background: "#FFFFFF", borderRadius: 10, padding: "12px 0", textAlign: "center" }}>
+            <div style={{ fontFamily: DISPLAY, fontSize: 26, fontWeight: 700 }}>{v}</div>
+            <div style={{ fontSize: 9, letterSpacing: 1.2, color: "#6C7686" }}>{k}</div>
+          </div>
+        ))}
+      </div>
 
-  const recent = [...history].sort((a, b) => (a.d < b.d ? 1 : -1)).slice(0, 10);
+      <BarChart title="Workouts per week" weeks={m.weeks} counts={m.workoutsPerWeek} color="#46C98B" />
+      <BarChart title="Exercises per week" weeks={m.weeks} counts={m.exercisesPerWeek} color="#5B8DEF" />
+      <BarChart title="Reps per week" weeks={m.weeks} counts={m.repsPerWeek} color="#E85D5D" />
+
+      <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 14 }}>
+        <div style={{ fontSize: 11, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, textTransform: "uppercase", marginBottom: 10 }}>
+          Muscle group split (sets completed)
+        </div>
+        {Object.keys(GROUPS).map((g) => {
+          const c = m.groupTotals[g] || 0;
+          return (
+            <div key={g} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <div style={{ width: 74, fontSize: 12, color: GROUPS[g].color, fontWeight: 700 }}>{GROUPS[g].label}</div>
+              <div style={{ flex: 1, height: 14, background: "#E4E7EC", borderRadius: 7, overflow: "hidden" }}>
+                <div style={{ width: `${(c / m.groupMax) * 100}%`, height: "100%", background: GROUPS[g].color, borderRadius: 7 }} />
+              </div>
+              <div style={{ width: 34, textAlign: "right", fontSize: 12, color: "#6C7686" }}>{c}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 14 }}>
+        <div style={{ fontSize: 11, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, textTransform: "uppercase", marginBottom: 10 }}>
+          Recent sessions
+        </div>
+        {m.recent.length === 0 && (
+          <div style={{ fontSize: 13, color: "#9AA3B0" }}>No workouts logged yet.</div>
+        )}
+        {m.recent.map((h) => (
+          <div key={h.d} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #E4E7EC", fontSize: 13 }}>
+            <div style={{ color: "#3D4756" }}>
+              {new Date(h.d + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+            </div>
+            <div style={{ color: "#6C7686" }}>
+              {h.mode} · {h.ex} sets{h.reps ? ` · ${h.reps} reps` : ""}
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+export default function Stats({ history, onBack, shareOn, shareLink, onToggleShare, onCopyShare, shareCopied }) {
+  const S = styles;
+  const m = useMemo(() => computeSummary(history), [history]);
 
   return (
     <div style={S.app}>
@@ -126,58 +112,34 @@ export default function Stats({ history, onBack }) {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 20px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-          {bigStats.map(([k, v]) => (
-            <div key={k} style={{ background: "#FFFFFF", borderRadius: 10, padding: "12px 0", textAlign: "center" }}>
-              <div style={{ fontFamily: DISPLAY, fontSize: 26, fontWeight: 700 }}>{v}</div>
-              <div style={{ fontSize: 9, letterSpacing: 1.2, color: "#6C7686" }}>{k}</div>
-            </div>
-          ))}
-        </div>
-
-        <BarChart title="Workouts per week" weeks={m.weeks} counts={m.workoutsPerWeek} color="#46C98B" />
-        <BarChart title="Exercises per week" weeks={m.weeks} counts={m.exercisesPerWeek} color="#5B8DEF" />
-        <BarChart title="Reps per week" weeks={m.weeks} counts={m.repsPerWeek} color="#E85D5D" />
-
         <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 14 }}>
-          <div style={{ fontSize: 11, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, textTransform: "uppercase", marginBottom: 10 }}>
-            Muscle group split (sets completed)
-          </div>
-          {Object.keys(GROUPS).map((g) => {
-            const c = m.groupTotals[g] || 0;
-            return (
-              <div key={g} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                <div style={{ width: 74, fontSize: 12, color: GROUPS[g].color, fontWeight: 700 }}>{GROUPS[g].label}</div>
-                <div style={{ flex: 1, height: 14, background: "#E4E7EC", borderRadius: 7, overflow: "hidden" }}>
-                  <div style={{ width: `${(c / m.groupMax) * 100}%`, height: "100%", background: GROUPS[g].color, borderRadius: 7 }} />
-                </div>
-                <div style={{ width: 34, textAlign: "right", fontSize: 12, color: "#6C7686" }}>{c}</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 11, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, textTransform: "uppercase" }}>
+                Public progress page
               </div>
-            );
-          })}
-          <div style={{ fontSize: 10, color: "#9AA3B0", marginTop: 4 }}>
-            Counts what you confirm on the workout summary — including edited and HIIT max-effort sets.
+              <div style={{ fontSize: 12, color: "#9AA3B0", marginTop: 3 }}>
+                {shareOn ? "Live — anyone with the link can see this page, no login." : "Off — the link shows nothing until you turn it on."}
+              </div>
+            </div>
+            <button onClick={() => onToggleShare(!shareOn)}
+              style={{ ...S.pill, background: shareOn ? "#2FA671" : "#E4E7EC", color: shareOn ? "#FFFFFF" : "#6C7686" }}>
+              {shareOn ? "LIVE" : "OFF"}
+            </button>
           </div>
-        </div>
-
-        <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 14 }}>
-          <div style={{ fontSize: 11, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, textTransform: "uppercase", marginBottom: 10 }}>
-            Recent sessions
-          </div>
-          {recent.length === 0 && (
-            <div style={{ fontSize: 13, color: "#9AA3B0" }}>No workouts logged yet. Go lift something.</div>
+          {shareOn && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+              <div style={{ flex: 1, fontSize: 11, color: "#6C7686", fontFamily: "ui-monospace,monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {shareLink}
+              </div>
+              <button onClick={onCopyShare} style={{ ...S.pill, background: "#1B2430", color: "#F5F6F8", flexShrink: 0 }}>
+                {shareCopied ? "COPIED ✓" : "copy link"}
+              </button>
+            </div>
           )}
-          {recent.map((h) => (
-            <div key={h.d} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #E4E7EC", fontSize: 13 }}>
-              <div style={{ color: "#3D4756" }}>
-                {new Date(h.d + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-              </div>
-              <div style={{ color: "#6C7686" }}>
-                {h.mode || "circuit"} · {exDoneOf(h)} sets{h.totalReps ? ` · ${h.totalReps} reps` : ""}
-              </div>
-            </div>
-          ))}
         </div>
+
+        <SummaryBody m={m} />
       </div>
     </div>
   );

@@ -3,6 +3,10 @@ import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db, googleProvider, ADMIN_EMAIL } from "./firebase";
 import DadLift from "./DadLift.jsx";
+import SharedPage from "./SharedPage.jsx";
+
+/* /s/{token} is the public, login-free progress page */
+const SHARE_MATCH = window.location.pathname.match(/^\/s\/([A-Za-z0-9_-]{10,})/);
 
 const S = {
   splash: {
@@ -74,6 +78,10 @@ export default function App() {
       catch (e2) { setErr(e2.message || "Sign-in failed."); }
     }
   };
+
+  if (SHARE_MATCH) {
+    return <SharedPage token={SHARE_MATCH[1]} />;
+  }
 
   if (user === undefined || (user && allowed === null)) {
     return (

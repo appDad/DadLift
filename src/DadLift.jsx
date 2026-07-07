@@ -3,6 +3,8 @@ import { loadJSON, saveJSON } from "./storage";
 import { coachModel } from "./firebase";
 import { POSES, GROUPS, BUILTIN, EQUIPMENT, buildAddPrompt, validateExercise, resolveFrames } from "./exercises";
 import { loadCommunity, publishExercise, unpublishExercise } from "./community";
+import { ymd, calcStreak } from "./summary";
+import { newShareId, shareUrl, publishSnapshot, removeSnapshot } from "./share";
 import { styles, DISPLAY, FONT_CSS } from "./theme";
 import Stats from "./Stats.jsx";
 import Users from "./Users.jsx";
@@ -17,7 +19,6 @@ function mulberry32(a) {
   };
 }
 const dateSeed = (d) => d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
-export const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 /* ============ daily workout builder ============ */
 /* thumbs bias the deterministic picker: 👍 3x weight, 👎 0.4x, neutral 1x */
@@ -107,17 +108,6 @@ function Thumbs({ value, onChange, size = 15 }) {
       ))}
     </div>
   );
-}
-
-/* ============ streak math ============ */
-export function calcStreak(history) {
-  if (!history.length) return 0;
-  const days = new Set(history.map((h) => h.d));
-  let streak = 0;
-  const cur = new Date();
-  if (!days.has(ymd(cur))) cur.setDate(cur.getDate() - 1);
-  while (days.has(ymd(cur))) { streak++; cur.setDate(cur.getDate() - 1); }
-  return streak;
 }
 
 /* ============ figure ============ */
@@ -505,6 +495,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [hiddenComm, setHiddenComm] = useState([]); // community ids hidden from MY instance
   const [equip, setEquip] = useState({}); // equipment key -> false when I don't have it (default: have it)
   const [customEquip, setCustomEquip] = useState([]); // user-added equipment names
+  const [share, setShare] = useState({ id: null, on: false }); // public progress page
+  const [shareCopied, setShareCopied] = useState(false);
   const savedRef = useRef(false);
   const recRef = useRef(null);
   // live counters mirrored into refs so advance() (called from timer closures) sees fresh values
@@ -552,6 +544,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       setCustomEx(await loadJSON("customex", []));
       setRatings(await loadJSON("ratings", {}));
       setHiddenComm(await loadJSON("hiddencomm", []));
+      setShare(await loadJSON("share", { id: null, on: false }));
       loadCommunity().then(setCommunity);
       const s = await loadJSON("settings", null);
       if (s) {
@@ -601,6 +594,27 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     setHistory([]);
     saveJSON("history", []);
     saveJSON("logins", []); // stale key from the old visit tracking
+    if (share.on && share.id) publishSnapshot(user.uid, firstName(), [], share.id);
+  };
+
+  /* ----- public progress page ----- */
+  const firstName = () => (user.displayName || user.email || "someone").split(" ")[0].split("@")[0];
+  const setSharing = (on) => {
+    const id = share.id || newShareId();
+    const next = { id, on };
+    setShare(next);
+    saveJSON("share", next);
+    if (on) publishSnapshot(user.uid, firstName(), history, id);
+    else removeSnapshot(id); // deleting the doc kills the link immediately
+    return next;
+  };
+  const copyShareLink = async () => {
+    const s = share.on ? share : setSharing(true);
+    try {
+      await navigator.clipboard.writeText(shareUrl(s.id));
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch (e) { /* clipboard blocked — the stats screen shows the link */ }
   };
 
   const addCustom = (arr) => {
@@ -781,6 +795,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     const newHist = [...history.filter((h) => h.d !== entry.d), entry];
     setHistory(newHist);
     saveJSON("history", newHist);
+    if (share.on && share.id) publishSnapshot(user.uid, firstName(), newHist, share.id);
     setLastEntry(entry);
     setDoneExList(exList);
     setScreen("done");
@@ -874,7 +889,9 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       userEmail={user.email} onSignOut={onSignOut} />;
   }
   if (screen === "stats") {
-    return <Stats history={history} onBack={() => setScreen("home")} />;
+    return <Stats history={history} onBack={() => setScreen("home")}
+      shareOn={share.on} shareLink={share.id ? shareUrl(share.id) : ""}
+      onToggleShare={setSharing} onCopyShare={copyShareLink} shareCopied={shareCopied} />;
   }
   if (screen === "users" && isAdmin) {
     return <Users onBack={() => setScreen("home")} />;
@@ -1097,10 +1114,18 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
             </div>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
           <button onClick={() => setScreen("home")} style={{ ...S.startBtn, width: "auto", padding: "14px 32px" }}>BACK</button>
           <button onClick={() => setScreen("stats")} style={{ ...S.startBtn, width: "auto", padding: "14px 32px", background: "#E4E7EC", color: "#1B2430" }}>STATS</button>
+          <button onClick={copyShareLink} style={{ ...S.startBtn, width: "auto", padding: "14px 32px", background: "#E4E7EC", color: "#1B2430" }}>
+            {shareCopied ? "LINK COPIED ✓" : "SHARE MY SUMMARY"}
+          </button>
         </div>
+        {shareCopied && (
+          <div style={{ fontSize: 11, color: "#2FA671" }}>
+            Your public progress page is live — the link is on your clipboard.
+          </div>
+        )}
       </div>
     );
   }
