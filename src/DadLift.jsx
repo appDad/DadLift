@@ -640,14 +640,43 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   useEffect(() => {
     (async () => {
       setHistory(await loadJSON("history", []));
-      setCustomEx(await loadJSON("customex", []));
       setRatings(await loadJSON("ratings", {}));
       setHiddenComm(await loadJSON("hiddencomm", []));
       setShare(await loadJSON("share", { id: null, on: false }));
       // merge admin catalog extensions BEFORE community loads — community
       // exercises tagged with admin-added gear must pass validation
       setExtEquip(await loadEquipExtensions());
-      loadCommunity().then(setCommunity);
+
+      // one-shot migration: persist equipment tags onto any of MY custom
+      // exercises that predate the eq field (idempotent — noop once tagged)
+      const rawCustom = await loadJSON("customex", []);
+      const taggedCustom = rawCustom.map((e) => {
+        if (e.eq) return e;
+        const g = inferEquip(e);
+        return g ? { ...e, eq: g } : e;
+      });
+      setCustomEx(taggedCustom);
+      if (taggedCustom.some((e, i) => e.eq !== rawCustom[i].eq)) {
+        saveJSON("customex", taggedCustom);
+        const em = (user.email || "").toLowerCase();
+        taggedCustom.forEach((e, i) => { if (e.eq !== rawCustom[i].eq) publishExercise(e, em); });
+      }
+
+      loadCommunity().then((comm) => {
+        // same migration for shared exercises; only the admin may rewrite
+        // other people's docs (rules), everyone else just tags in memory
+        const fixed = comm.map((c) => {
+          if (c.ex.eq) return c;
+          const g = inferEquip(c.ex);
+          return g ? { ...c, ex: { ...c.ex, eq: g } } : c;
+        });
+        setCommunity(fixed);
+        if (isAdmin) {
+          fixed.forEach((c, i) => {
+            if (c.ex.eq && !comm[i].ex.eq) publishExercise(c.ex, c.by); // keeps original contributor
+          });
+        }
+      });
       const s = await loadJSON("settings", null);
       if (s) {
         setRounds(s.rounds ?? 2); setTempo(s.tempo ?? 3); setVoiceOn(s.voiceOn ?? true);
