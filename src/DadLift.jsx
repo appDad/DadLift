@@ -1146,17 +1146,17 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       <div style={S.app}>
         <style>{FONT_CSS}</style>
         <div style={{ ...S.header, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div>
-            <div style={S.eyebrow}>{dateStr}</div>
-            <div style={S.title}>DADLIFT</div>
-            <div style={S.sub}>
-              {allEx.length} in library · {mode === "hiit" ? `HIIT ${hiit[0]}s on / ${hiit[1]}s off` : `reps today: ${workout.reps} · ${tempo}s/rep`}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <img src="/icons/dadlift-icon-192.png" alt="" width={56} height={56} style={{ borderRadius: "50%", flexShrink: 0 }} />
+            <div>
+              <div style={S.eyebrow}>{dateStr}</div>
+              <div style={S.title}>DADLIFT</div>
+              <div style={S.sub}>
+                {allEx.length} in library · {mode === "hiit" ? `HIIT ${hiit[0]}s on / ${hiit[1]}s off` : `reps today: ${workout.reps} · ${tempo}s/rep`}
+              </div>
             </div>
           </div>
           <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <button onClick={reshuffle} title="Reshuffle today's workout" style={{ ...S.pill, background: "#E4E7EC", color: "#3D4756", fontSize: 16, lineHeight: 1 }}>
-              ⟳
-            </button>
             <button onClick={() => setScreen("stats")} style={{ ...S.pill, background: "#E4E7EC", color: "#3D4756" }}>
               stats
             </button>
@@ -1212,8 +1212,12 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           </div>
         </div>
 
-        <div style={{ padding: "0 16px 8px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px 8px" }}>
           <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700 }}>TODAY'S WORKOUT</div>
+          <button onClick={reshuffle}
+            style={{ ...S.pill, padding: "8px 16px", fontSize: 13, fontWeight: 700, background: "#5B8DEF", color: "#FFFFFF" }}>
+            ⟳ RESHUFFLE
+          </button>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px" }}>
           {exList.map((e) => {
@@ -1301,7 +1305,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           </div>
           <button onClick={start} style={S.startBtn}>START WORKOUT</button>
           <div style={{ textAlign: "center", fontSize: 12, color: "#9AA3B0" }}>
-            Same day = same workout — tap ⟳ up top to reshuffle. 👍 favorites an exercise (shows more), 👎 swaps it out (shows less). Tap a card for form.
+            Same day = same workout — tap ⟳ RESHUFFLE for a new draw. 👍 favorites an exercise (shows more), 👎 swaps it out (shows less). Tap a card for form.
           </div>
         </div>
       </div>
