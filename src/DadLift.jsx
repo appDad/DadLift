@@ -1154,6 +1154,9 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
             </div>
           </div>
           <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <button onClick={reshuffle} title="Reshuffle today's workout" style={{ ...S.pill, background: "#E4E7EC", color: "#3D4756", fontSize: 16, lineHeight: 1 }}>
+              ⟳
+            </button>
             <button onClick={() => setScreen("stats")} style={{ ...S.pill, background: "#E4E7EC", color: "#3D4756" }}>
               stats
             </button>
@@ -1209,12 +1212,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px 8px" }}>
+        <div style={{ padding: "0 16px 8px" }}>
           <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700 }}>TODAY'S WORKOUT</div>
-          <button onClick={reshuffle}
-            style={{ ...S.pill, padding: "6px 14px", fontSize: 12, background: "#E4E7EC", color: "#3D4756" }}>
-            ⟳ reshuffle
-          </button>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px" }}>
           {exList.map((e) => {
@@ -1241,12 +1240,20 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                         </>
                       )}
                     </div>
-                    <button
-                      onClick={(ev) => { ev.stopPropagation(); banExercise(e.id); }}
-                      title="Swap it out — and remember I don't like it"
-                      style={{ border: "none", background: "#EFF1F5", borderRadius: 8, padding: "2px 9px", cursor: "pointer", fontSize: 13, lineHeight: 1.4 }}>
-                      👎
-                    </button>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button
+                        onClick={(ev) => { ev.stopPropagation(); rate(e.id, ratings[e.id] === 1 ? 0 : 1); }}
+                        title="Favorite — show this more often"
+                        style={{ border: "none", background: ratings[e.id] === 1 ? "#D8F3E5" : "#EFF1F5", outline: ratings[e.id] === 1 ? "2px solid #2FA671" : "none", borderRadius: 8, padding: "2px 9px", cursor: "pointer", fontSize: 13, lineHeight: 1.4 }}>
+                        👍
+                      </button>
+                      <button
+                        onClick={(ev) => { ev.stopPropagation(); banExercise(e.id); }}
+                        title="Swap it out — and show it less often"
+                        style={{ border: "none", background: "#EFF1F5", borderRadius: 8, padding: "2px 9px", cursor: "pointer", fontSize: 13, lineHeight: 1.4 }}>
+                        👎
+                      </button>
+                    </div>
                   </div>
                 </div>
                 {open && (
@@ -1294,7 +1301,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           </div>
           <button onClick={start} style={S.startBtn}>START WORKOUT</button>
           <div style={{ textAlign: "center", fontSize: 12, color: "#9AA3B0" }}>
-            Same day = same workout — unless you ⟳ reshuffle. 👎 swaps an exercise out and remembers the dislike. Tap a card for form.
+            Same day = same workout — tap ⟳ up top to reshuffle. 👍 favorites an exercise (shows more), 👎 swaps it out (shows less). Tap a card for form.
           </div>
         </div>
       </div>
