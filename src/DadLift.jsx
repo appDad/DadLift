@@ -598,23 +598,18 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const advance = (partial = false) => {
     logDone(partial);
     beep(1200, 0.25);
+    // both modes: ask FIRST, hold the announcement until answered (or ~7s)
     const askReps = ex.type === "reps" && micOn;
-    const hiitAsk = mode === "hiit" && askReps; // HIIT: ask FIRST, announce after — no time to wait out the speech
     const slot = sessionLogRef.current.length - 1;
 
     const goRest = (announceText, secs) => {
       setPhase("rest"); setTimeLeft(secs);
-      if (hiitAsk) {
+      if (askReps) {
         setHeard(null);
         say("How many reps?");
         setTimeout(() => listenForReps(slot, announceText), 900);
       } else {
         say(announceText);
-        if (askReps) {
-          // circuit: announcement first, mic opens during the rest
-          setHeard(null);
-          setTimeout(() => listenForReps(slot), 2000);
-        }
       }
     };
 
@@ -622,7 +617,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       goRest(`Rest. Next up: ${exList[idx + 1].name}`, mode === "hiit" ? hiit[1] : restSecs);
     } else if (round < rounds) {
       goRest(`Round ${round} done. Long rest.`, roundRest);
-    } else if (hiitAsk) {
+    } else if (askReps) {
       // final set: ask for the count, summary opens underneath and gets the answer
       setHeard(null);
       say("How many reps?");
