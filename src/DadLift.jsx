@@ -68,6 +68,26 @@ function buildWorkout(date, allEx, emphasis, ratings = {}) {
   return { exercises: picks, reps };
 }
 
+/* ============ adaptive rep targets ============
+   Look at the last 4 honestly-recorded circuit sets of an exercise (partial
+   sets from mid-exercise quits are excluded at save time). Consistently over
+   target -> raise it, consistently under -> lower it. */
+function adaptTarget(exId, base, history) {
+  const recent = [];
+  for (let i = history.length - 1; i >= 0 && recent.length < 4; i--) {
+    for (const s of history[i].sets || []) {
+      if (s[0] === exId) recent.push(s); // [id, value, target]
+      if (recent.length >= 4) break;
+    }
+  }
+  if (recent.length < 2) return base;
+  const avgDelta = recent.reduce((t, s) => t + (s[1] - s[2]), 0) / recent.length;
+  let adj = 0;
+  if (avgDelta >= 5) adj = 4; else if (avgDelta >= 2) adj = 2;
+  else if (avgDelta <= -5) adj = -4; else if (avgDelta <= -2) adj = -2;
+  return Math.max(6, Math.min(25, base + adj));
+}
+
 /* ============ thumbs rating control ============ */
 function Thumbs({ value, onChange, size = 15 }) {
   return (
@@ -449,6 +469,12 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   );
   const exList = workout.exercises;
   const ex = exList[idx];
+  const repTargets = useMemo(() => {
+    const t = {};
+    for (const e of exList) if (e.type === "reps") t[e.id] = adaptTarget(e.id, workout.reps, history);
+    return t;
+  }, [exList, workout.reps, history]);
+  const repTargetOf = (e) => repTargets[e.id] || workout.reps;
   const say = (t) => { if (voiceOn) speak(t); };
 
   useEffect(() => {
@@ -546,18 +572,18 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   };
 
   /* record what actually happened for one work slot — feeds the editable summary */
-  const logDone = () => {
+  const logDone = (partial = false) => {
     const last = sessionLogRef.current[sessionLogRef.current.length - 1];
     if (last && last.name === ex.name && last.round === round) return; // DONE pressed as the auto-counter fired
     const total = mode === "hiit" ? hiit[0] : ex.type === "time" ? ex.secs : 0;
     let value;
     if (ex.type === "reps") value = mode === "hiit" ? 0 : repRef.current; // HIIT reps are AMRAP — filled in on the summary
     else value = Math.max(0, total - (timeLeftRef.current || 0));
-    sessionLogRef.current.push({ name: ex.name, grp: ex.grp, unit: ex.type === "time" ? "s" : "reps", value, round });
+    sessionLogRef.current.push({ id: ex.id, name: ex.name, grp: ex.grp, unit: ex.type === "time" ? "s" : "reps", value, round, partial });
   };
 
-  const advance = () => {
-    logDone();
+  const advance = (partial = false) => {
+    logDone(partial);
     if (ex.type === "reps" && micOn) {
       // let the "Rest…" announcement finish, then open the mic for the rep count
       const slot = sessionLogRef.current.length - 1;
@@ -592,12 +618,14 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     for (let r = 1; r <= rounds; r++) {
       for (const e of exList) {
         rows.push({
+          id: e.id,
           name: e.name,
           grp: e.grp,
           unit: e.type === "time" ? "s" : "reps",
-          target: e.type === "time" ? (mode === "hiit" ? hiit[0] : e.secs) : (mode === "hiit" ? "max" : workout.reps),
+          target: e.type === "time" ? (mode === "hiit" ? hiit[0] : e.secs) : (mode === "hiit" ? "max" : repTargetOf(e)),
           round: r,
           value: k < log.length ? log[k].value : 0,
+          partial: k < log.length ? !!log[k].partial : false,
         });
         k++;
       }
@@ -616,7 +644,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       const total = mode === "hiit" ? hiit[0] : ex.type === "time" ? ex.secs : 0;
       const elapsed = total - (timeLeftRef.current || 0);
       const progress = ex.type === "reps" && mode !== "hiit" ? repRef.current > 0 : elapsed > 0;
-      if (progress) logDone();
+      if (progress) logDone(true); // partial — excluded from target adaptation
     }
     if (sessionLogRef.current.length === 0) { setScreen("home"); return; }
     openSummary();
@@ -636,6 +664,11 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       totalSecs: done.filter((r) => r.unit === "s").reduce((s, r) => s + r.value, 0),
       groups,
       exercises: [...new Set(done.map((r) => r.name))],
+      // per-set results that feed target adaptation: circuit rep sets only,
+      // skipping partial (quit/skipped mid-exercise) sets
+      sets: summaryRows
+        .filter((r) => r.unit === "reps" && r.value > 0 && !r.partial && typeof r.target === "number")
+        .map((r) => [r.id, r.value, r.target]),
     };
     const newHist = [...history.filter((h) => h.d !== entry.d), entry];
     setHistory(newHist);
@@ -676,7 +709,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
   useEffect(() => {
     if (screen !== "player" || phase !== "work" || mode === "hiit" || !ex || ex.type !== "reps") return;
-    const target = workout.reps;
+    const target = repTargetOf(ex);
     const t = setInterval(() => {
       setRep((r) => {
         const next = r + 1;
@@ -735,7 +768,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   if (screen === "summary") {
     const setVal = (i, v) => {
       const next = summaryRows.slice();
-      next[i] = { ...next[i], value: Math.max(0, Math.min(999, Math.round(v) || 0)) };
+      // a hand-corrected number is intentional — it counts toward adaptation again
+      next[i] = { ...next[i], value: Math.max(0, Math.min(999, Math.round(v) || 0)), partial: false };
       setSummaryRows(next);
     };
     const doneCount = summaryRows.filter((r) => r.value > 0).length;
@@ -839,7 +873,13 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                     <div style={{ fontFamily: DISPLAY, fontSize: 20, fontWeight: 600, letterSpacing: 0.5 }}>{e.name}</div>
                   </div>
                   <div style={{ fontSize: 13, color: "#6C7686", flexShrink: 0 }}>
-                    {mode === "hiit" ? `${hiit[0]}s` : e.type === "time" ? `${e.secs}s` : `×${workout.reps}`}
+                    {mode === "hiit" ? `${hiit[0]}s` : e.type === "time" ? `${e.secs}s` : (
+                      <>
+                        ×{repTargetOf(e)}
+                        {repTargetOf(e) > workout.reps && <span style={{ color: "#2FA671", fontWeight: 700 }}> ↑</span>}
+                        {repTargetOf(e) < workout.reps && <span style={{ color: "#B47E10", fontWeight: 700 }}> ↓</span>}
+                      </>
+                    )}
                   </div>
                 </div>
                 {open && (
@@ -943,7 +983,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         <div style={{ fontSize: 13, color: "#6C7686", letterSpacing: 1 }}>
           ROUND {round}/{rounds} · {idx + 1}/{exList.length}
         </div>
-        <button onClick={() => (isRest ? startNext() : advance())} style={S.ghostBtn}>skip ›</button>
+        <button onClick={() => (isRest ? startNext() : advance(true))} style={S.ghostBtn}>skip ›</button>
       </div>
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "0 20px", textAlign: "center" }}>
@@ -966,9 +1006,9 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
             </div>
           </Ring>
         ) : (
-          <Ring total={workout.reps} left={workout.reps - rep} color={g.color}>
+          <Ring total={repTargetOf(ex)} left={repTargetOf(ex) - rep} color={g.color}>
             <div style={{ fontFamily: DISPLAY, fontSize: 64, fontWeight: 700, lineHeight: 1, color: g.color }}>{rep}</div>
-            <div style={{ fontSize: 12, color: "#6C7686", letterSpacing: 1 }}>OF {workout.reps} REPS</div>
+            <div style={{ fontSize: 12, color: "#6C7686", letterSpacing: 1 }}>OF {repTargetOf(ex)} REPS</div>
           </Ring>
         )}
 

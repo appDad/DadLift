@@ -74,6 +74,11 @@ Live at **https://dadlift.web.app**
 - After every rep-based set (circuit or HIIT), the mic listens during rest — say the
   number you actually did and it overrides the auto-count (toggle in settings).
 - Settings → DATA → "clear" wipes workout history (two-tap confirm).
+- **Adaptive targets**: each rep exercise compares your last 4 honest circuit sets
+  against their targets — consistently over raises today's target (+2/+4),
+  consistently under lowers it (−2/−4), clamped 6–25. Sets cut short by quitting
+  or skipping mid-exercise are flagged partial and excluded (editing a partial
+  set's number on the summary makes it count again). Home shows ↑/↓ per exercise.
 
 ## Firebase console — already configured
 
