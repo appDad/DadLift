@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { loadJSON, saveJSON } from "./storage";
 import { coachModel } from "./firebase";
-import { POSES, GROUPS, BUILTIN, EQUIPMENT, buildAddPrompt, validateExercise, resolveFrames } from "./exercises";
+import { POSES, GROUPS, BUILTIN, EQUIPMENT, DEFAULT_EQUIP, normalizeEquip, buildAddPrompt, validateExercise, resolveFrames } from "./exercises";
 import { loadCommunity, publishExercise, unpublishExercise } from "./community";
 import { ymd, calcStreak } from "./summary";
 import { newShareId, shareUrl, publishSnapshot, removeSnapshot } from "./share";
@@ -238,16 +238,14 @@ function Stepper({ label, value, unit, min, max, step, onChange }) {
   );
 }
 
-function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, micOn, setMicOn, customEquip, onAddEquip, onRemoveEquip, onClearHistory, onBack, userEmail, onSignOut }) {
+function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, micOn, setMicOn, customEquip, onAddEquip, onRemoveEquip, focusEquip, onClearHistory, onBack, userEmail, onSignOut }) {
   const S = styles;
   const [armClear, setArmClear] = useState(false); // two-tap confirm for the destructive bit
-  const [newEquip, setNewEquip] = useState("");
-  const addEquip = () => {
-    const name = newEquip.trim().toLowerCase();
-    if (!name) return;
-    onAddEquip(name);
-    setNewEquip("");
-  };
+  const equipRef = useRef(null);
+  useEffect(() => {
+    if (focusEquip && equipRef.current) equipRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [focusEquip]);
+  const addable = Object.keys(EQUIPMENT).filter((k) => !DEFAULT_EQUIP.includes(k) && !customEquip.includes(k));
   return (
     <div style={S.app}>
       <style>{FONT_CSS}</style>
@@ -278,34 +276,37 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
             {voiceOn ? "ON" : "OFF"}
           </button>
         </div>
-        <div style={S.settingsLabel}>EQUIPMENT</div>
-        <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={S.settingsLabel} ref={equipRef}>EQUIPMENT</div>
+        <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ fontSize: 13, color: "#6C7686", lineHeight: 1.4 }}>
-            Dumbbells and med ball are built in. Add anything else you own — kettlebell,
-            bands, pull-up bar… — then tag exercises with it when importing. Toggle what's
-            on hand from the home screen.
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input
-              value={newEquip}
-              onChange={(e) => setNewEquip(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addEquip()}
-              placeholder="e.g. kettlebell"
-              style={{
-                flex: 1, boxSizing: "border-box", background: "#EFF1F5", color: "#1B2430",
-                border: "1px solid #DDE2E9", borderRadius: 10, padding: "10px 12px", fontSize: 14,
-              }}
-            />
-            <button onClick={addEquip} style={{ ...S.pill, background: "#1B2430", color: "#F5F6F8" }}>ADD</button>
+            Dumbbells and med ball are built in. Tap gear you own to add it — it's a fixed
+            list so community exercises never end up tagged with misspelled equipment.
+            Toggle what's on hand for today from the home screen.
           </div>
           {customEquip.length > 0 && (
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {customEquip.map((k) => (
-                <span key={k} style={{ ...S.pill, padding: "6px 10px", fontSize: 12, background: "#E4E7EC", color: "#3D4756", display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  {k}
-                  <button onClick={() => onRemoveEquip(k)} style={{ border: "none", background: "none", color: "#E85D5D", cursor: "pointer", fontSize: 14, padding: 0 }}>✕</button>
-                </span>
-              ))}
+            <div>
+              <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, marginBottom: 6 }}>YOUR GEAR</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {customEquip.map((k) => (
+                  <span key={k} style={{ ...S.pill, padding: "6px 10px", fontSize: 12, background: "#1B2430", color: "#F5F6F8", display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    {EQUIPMENT[k] ? EQUIPMENT[k].label : k}
+                    <button onClick={() => onRemoveEquip(k)} style={{ border: "none", background: "none", color: "#E85D5D", cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {addable.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, marginBottom: 6 }}>TAP TO ADD</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {addable.map((k) => (
+                  <button key={k} onClick={() => onAddEquip(k)}
+                    style={{ ...S.pill, padding: "6px 10px", fontSize: 12, background: "#EFF1F5", color: "#3D4756", border: "1px dashed #DDE2E9" }}>
+                    + {EQUIPMENT[k].label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -335,7 +336,7 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
 }
 
 /* ============ library screen ============ */
-function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, communityBy, onHide, equipNames }) {
+function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, communityBy, onHide, ownedEquip }) {
   const [tab, setTab] = useState("browse"); // browse | add | export
   const [pasteVal, setPasteVal] = useState("");
   const [msg, setMsg] = useState(null);
@@ -361,6 +362,11 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, comm
     const names = new Set(allEx.map((e) => norm(e.name)));
     const good = [], bad = [];
     for (const e of arr) {
+      // normalize equipment spellings/aliases to catalog keys before validating
+      if (e && e.eq != null) {
+        const key = normalizeEquip(e.eq);
+        if (key) e.eq = key;
+      }
       const errs = validateExercise(e);
       if (ids.has(e.id)) errs.push(`duplicate id "${e.id}"`);
       if (names.has(norm(e.name))) errs.push(`"${e.name}" already in library`);
@@ -434,7 +440,7 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, comm
           <div style={{ fontSize: 13, color: "#3D4756", lineHeight: 1.5 }}>
             Copy the prompt, give it to Claude or Gemini with the muscle group and count you want, then paste the JSON below. The prompt already lists every exercise in your library so you won't get duplicates. Anything valid gets added — and shared to the community for the other DadLifters.
           </div>
-          <button onClick={() => copyText(buildAddPrompt(allEx, equipNames), "prompt")} style={{ ...S.startBtn, fontSize: 16, padding: "12px 0" }}>
+          <button onClick={() => copyText(buildAddPrompt(allEx, ownedEquip), "prompt")} style={{ ...S.startBtn, fontSize: 16, padding: "12px 0" }}>
             {copied === "prompt" ? "COPIED" : "COPY GENERATION PROMPT"}
           </button>
           <textarea value={pasteVal} onChange={(ev) => setPasteVal(ev.target.value)}
@@ -497,6 +503,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [customEquip, setCustomEquip] = useState([]); // user-added equipment names
   const [share, setShare] = useState({ id: null, on: false }); // public progress page
   const [shareCopied, setShareCopied] = useState(false);
+  const [settingsFocus, setSettingsFocus] = useState(null); // "equip" scrolls settings to that section
   const savedRef = useRef(false);
   const recRef = useRef(null);
   // live counters mirrored into refs so advance() (called from timer closures) sees fresh values
@@ -515,9 +522,10 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     () => Object.fromEntries(community.map((c) => [c.ex.id, c.by])),
     [community]
   );
-  /* every equipment key we know about: built-ins, user-added, tags on library exercises */
+  /* equipment shown as chips: the two defaults, gear you added, and anything
+     a library exercise requires (all canonical catalog keys) */
   const equipKeys = useMemo(() => {
-    const keys = [...Object.keys(EQUIPMENT), ...customEquip];
+    const keys = [...DEFAULT_EQUIP, ...customEquip.filter((k) => !DEFAULT_EQUIP.includes(k))];
     for (const e of allEx) if (e.eq && !keys.includes(e.eq)) keys.push(e.eq);
     return keys;
   }, [allEx, customEquip]);
@@ -554,7 +562,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         setEmphasis(s.emphasis ?? "balanced");
         setMicOn(s.micOn ?? true);
         setEquip(s.equip ?? {});
-        setCustomEquip(s.customEquip ?? []);
+        // normalize any legacy free-text equipment into catalog keys
+        setCustomEquip([...new Set((s.customEquip ?? []).map(normalizeEquip).filter(Boolean))]);
       }
       setLoaded(true);
     })();
@@ -872,7 +881,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   if (screen === "library") {
     return <Library allEx={allEx} custom={customEx} onAdd={addCustom} onRemove={removeCustom}
       ratings={ratings} onRate={rate} communityBy={communityBy} onHide={hideCommunity}
-      equipNames={equipKeys.filter(haveEquip).map((k) => (EQUIPMENT[k] ? EQUIPMENT[k].label : k))}
+      ownedEquip={equipKeys.filter(haveEquip)}
       onBack={() => setScreen("home")} />;
   }
   if (screen === "settings") {
@@ -880,12 +889,13 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       roundRest={roundRest} setRoundRest={setRoundRest} hiit={hiit} setHiit={setHiit}
       voiceOn={voiceOn} setVoiceOn={setVoiceOn} micOn={micOn} setMicOn={setMicOn}
       customEquip={customEquip}
-      onAddEquip={(name) => { if (!customEquip.includes(name) && !EQUIPMENT[name]) setCustomEquip([...customEquip, name]); }}
-      onRemoveEquip={(name) => {
-        setCustomEquip(customEquip.filter((k) => k !== name));
-        const nextEquip = { ...equip }; delete nextEquip[name]; setEquip(nextEquip);
+      onAddEquip={(key) => { if (EQUIPMENT[key] && !customEquip.includes(key) && !DEFAULT_EQUIP.includes(key)) setCustomEquip([...customEquip, key]); }}
+      onRemoveEquip={(key) => {
+        setCustomEquip(customEquip.filter((k) => k !== key));
+        const nextEquip = { ...equip }; delete nextEquip[key]; setEquip(nextEquip);
       }}
-      onClearHistory={clearHistory} onBack={() => setScreen("home")}
+      focusEquip={settingsFocus === "equip"}
+      onClearHistory={clearHistory} onBack={() => { setSettingsFocus(null); setScreen("home"); }}
       userEmail={user.email} onSignOut={onSignOut} />;
   }
   if (screen === "stats") {
@@ -1009,6 +1019,10 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                 {(EQUIPMENT[k] ? EQUIPMENT[k].label : k)}{haveEquip(k) ? " ✓" : ""}
               </button>
             ))}
+            <button onClick={() => { setSettingsFocus("equip"); setScreen("settings"); }}
+              style={{ ...S.pill, padding: "6px 12px", fontSize: 12, background: "#EFF1F5", color: "#3D4756", border: "1px dashed #DDE2E9", fontWeight: 700 }}>
+              +
+            </button>
           </div>
           <div style={{ fontSize: 10, color: "#9AA3B0", marginTop: 6 }}>
             {availEx.length} of {allEx.length} exercises fit today's gear. Add new equipment in settings.

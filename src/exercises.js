@@ -237,10 +237,40 @@ const EQUIP_TAGS = {
 };
 BUILTIN.forEach((e) => { if (EQUIP_TAGS[e.id]) e.eq = EQUIP_TAGS[e.id]; });
 
+/* Canonical equipment catalog — the ONLY valid eq values. Structured picks +
+   alias normalization keep community exercises free of misspelled equipment. */
 export const EQUIPMENT = {
-  db: { label: "dumbbells" },
-  ball: { label: "med ball" },
+  db: { label: "dumbbells", aliases: ["dumbbell", "dumbells", "dumbell", "free weights"] },
+  ball: { label: "med ball", aliases: ["medicine ball", "medball", "slam ball", "slamball"] },
+  kb: { label: "kettlebell", aliases: ["kettle bell", "kettlebells", "kettel bell", "kettelbell"] },
+  bands: { label: "resistance bands", aliases: ["band", "resistance band", "loop band", "mini band", "tube band"] },
+  pullup: { label: "pull-up bar", aliases: ["pullup bar", "pull up bar", "chin-up bar", "chin up bar", "chinup bar"] },
+  bench: { label: "bench", aliases: ["weight bench", "flat bench", "workout bench"] },
+  barbell: { label: "barbell", aliases: ["bar bell", "olympic bar"] },
+  jumprope: { label: "jump rope", aliases: ["skipping rope", "speed rope", "jumping rope"] },
+  trx: { label: "suspension trainer", aliases: ["suspension straps", "rings", "gymnastic rings", "gym rings"] },
+  abwheel: { label: "ab wheel", aliases: ["ab roller", "wheel roller", "abs wheel"] },
+  sliders: { label: "sliders", aliases: ["gliders", "gliding discs", "furniture sliders", "slider discs"] },
+  sandbag: { label: "sandbag", aliases: ["sand bag", "power bag"] },
+  plate: { label: "weight plate", aliases: ["plates", "bumper plate"] },
+  box: { label: "plyo box", aliases: ["jump box", "step box", "plyometric box", "step"] },
 };
+
+/* always-on defaults from the original app; everything else is opt-in */
+export const DEFAULT_EQUIP = ["db", "ball"];
+
+const normStr = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
+/* map any spelling/alias to its canonical catalog key, or null if unknown */
+export function normalizeEquip(input) {
+  if (input == null) return null;
+  const n = normStr(input);
+  if (!n) return null;
+  for (const [key, def] of Object.entries(EQUIPMENT)) {
+    if (normStr(key) === n || normStr(def.label) === n) return key;
+    if ((def.aliases || []).some((a) => normStr(a) === n)) return key;
+  }
+  return null;
+}
 
 /* ============ structured prompt for adding exercises via any LLM ============ */
 const ADD_PROMPT_BASE = `Generate a JSON array of exercises for my workout app. Equipment available: __EQUIP__. Follow this schema exactly and reply with ONLY the JSON, no markdown fences:
@@ -251,7 +281,7 @@ const ADD_PROMPT_BASE = `Generate a JSON array of exercises for my workout app. 
   "grp": "back" | "chest" | "shoulders" | "arms" | "core",
   "type": "reps" | "time",
   "secs": 40,                    // only if type is "time"
-  "eq": "db" | "ball" | "<equipment name>",  // what it needs — OMIT the field entirely if bodyweight-only
+  "eq": "db",                    // equipment needed — allowed values ONLY: __EQKEYS__. OMIT the field entirely if bodyweight-only. Never invent other values.
   "cue": "One or two sentences of plain-language form instruction.",
   "frames": [FRAME_A, FRAME_B]   // start and end position stick figures
 }]
@@ -269,9 +299,13 @@ Conventions from existing figures: standing figures have head near [50,14], tors
 
 Generate N exercises for muscle group(s): X.`;
 
-export function buildAddPrompt(allEx, equipNames) {
+export function buildAddPrompt(allEx, equipKeys) {
+  const labels = equipKeys.map((k) => (EQUIPMENT[k] ? EQUIPMENT[k].label : k));
+  const keyList = equipKeys.map((k) => `"${k}" (${EQUIPMENT[k] ? EQUIPMENT[k].label : k})`).join(", ");
   return (
-    ADD_PROMPT_BASE.replace("__EQUIP__", ["bodyweight", ...equipNames].join(", ")) +
+    ADD_PROMPT_BASE
+      .replace("__EQUIP__", ["bodyweight", ...labels].join(", "))
+      .replace("__EQKEYS__", keyList || "none — bodyweight only") +
     `\n\nAlready in the library — do NOT generate these or near-duplicates of them:\n` +
     allEx.map((e) => e.name).join(", ")
   );
@@ -285,7 +319,7 @@ export function validateExercise(e) {
   if (!GROUPS[e.grp]) errs.push(`grp must be one of: ${Object.keys(GROUPS).join(", ")}`);
   if (!["reps", "time"].includes(e.type)) errs.push("type must be reps|time");
   if (e.type === "time" && !(e.secs > 0)) errs.push("time type needs secs");
-  if (e.eq != null && (typeof e.eq !== "string" || !e.eq.trim())) errs.push("eq must be an equipment name string or omitted");
+  if (e.eq != null && !EQUIPMENT[e.eq]) errs.push(`unknown equipment "${e.eq}" — allowed: ${Object.keys(EQUIPMENT).join(", ")} (or omit for bodyweight)`);
   if (!e.cue) errs.push("missing cue");
   const frames = e.frames || POSES[e.pose];
   if (!Array.isArray(frames) || frames.length !== 2) errs.push("needs frames[2] (or a valid pose key)");
