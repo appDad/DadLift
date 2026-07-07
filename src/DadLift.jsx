@@ -45,8 +45,8 @@ function weightedPick(pool, count, rng, ratings) {
   return out;
 }
 
-function buildWorkout(date, allEx, emphasis, ratings = {}) {
-  const rng = mulberry32(dateSeed(date));
+function buildWorkout(date, allEx, emphasis, ratings = {}, nonce = 0) {
+  const rng = mulberry32(dateSeed(date) + nonce * 131071); // reshuffles re-roll deterministically
   const groups = Object.keys(GROUPS);
   // 8 slots total: every group gets at least 1; a focus day gives that group 4,
   // otherwise the leftover slots rotate deterministically with the date
@@ -588,6 +588,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [shareCopied, setShareCopied] = useState(false);
   const [settingsFocus, setSettingsFocus] = useState(null); // "equip" scrolls settings to that section
   const [extEquip, setExtEquip] = useState({}); // admin-added catalog entries (config/equipment)
+  const [shuffleN, setShuffleN] = useState(0); // today's reshuffle count — new seed each press
+  const [excluded, setExcluded] = useState([]); // exercises thumbed out of TODAY'S workout
   const savedRef = useRef(false);
   const recRef = useRef(null);
   // live counters mirrored into refs so advance() (called from timer closures) sees fresh values
@@ -624,8 +626,14 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   /* only build workouts from exercises whose equipment is on hand */
   const availEx = useMemo(() => allEx.filter((e) => !e.eq || haveEquip(e.eq)), [allEx, equip]);
   const workout = useMemo(
-    () => buildWorkout(today, availEx, emphasis === "balanced" ? null : emphasis, ratings),
-    [today, availEx, emphasis, ratings]
+    () => buildWorkout(
+      today,
+      availEx.filter((e) => !excluded.includes(e.id)),
+      emphasis === "balanced" ? null : emphasis,
+      ratings,
+      shuffleN
+    ),
+    [today, availEx, emphasis, ratings, shuffleN, excluded]
   );
   const exList = workout.exercises;
   const ex = exList[idx];
@@ -646,6 +654,12 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       // merge admin catalog extensions BEFORE community loads — community
       // exercises tagged with admin-added gear must pass validation
       setExtEquip(await loadEquipExtensions());
+      // per-day workout tweaks: reshuffle count + thumbed-out exercises
+      const tweaks = await loadJSON("daytweaks", null);
+      if (tweaks && tweaks.d === ymd(today)) {
+        setShuffleN(tweaks.n || 0);
+        setExcluded(tweaks.out || []);
+      }
 
       // one-shot migration: persist equipment tags onto any of MY custom
       // exercises that predate the eq field (idempotent — noop once tagged)
@@ -727,6 +741,19 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     saveJSON("history", []);
     saveJSON("logins", []); // stale key from the old visit tracking
     if (share.on && share.id) publishSnapshot(user.uid, firstName(), [], share.id);
+  };
+
+  /* ----- today's-workout tweaks: reshuffle + thumb-out ----- */
+  const reshuffle = () => {
+    const n = shuffleN + 1;
+    setShuffleN(n);
+    saveJSON("daytweaks", { d: ymd(today), n, out: excluded });
+  };
+  const banExercise = (id) => {
+    rate(id, -1); // remember the dislike — future picks avoid it too
+    const out = [...excluded, id];
+    setExcluded(out);
+    saveJSON("daytweaks", { d: ymd(today), n: shuffleN, out });
   };
 
   /* ----- admin: extend the equipment catalog without code changes ----- */
@@ -1182,6 +1209,13 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           </div>
         </div>
 
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px 8px" }}>
+          <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700 }}>TODAY'S WORKOUT</div>
+          <button onClick={reshuffle}
+            style={{ ...S.pill, padding: "6px 14px", fontSize: 12, background: "#E4E7EC", color: "#3D4756" }}>
+            ⟳ reshuffle
+          </button>
+        </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px" }}>
           {exList.map((e) => {
             const g = GROUPS[e.grp];
@@ -1197,14 +1231,22 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                     <div style={{ fontSize: 11, letterSpacing: 1.5, color: g.color, fontWeight: 700, textTransform: "uppercase" }}>{g.label}</div>
                     <div style={{ fontFamily: DISPLAY, fontSize: 20, fontWeight: 600, letterSpacing: 0.5 }}>{e.name}</div>
                   </div>
-                  <div style={{ fontSize: 13, color: "#6C7686", flexShrink: 0 }}>
-                    {mode === "hiit" ? `${hiit[0]}s` : e.type === "time" ? `${e.secs}s` : (
-                      <>
-                        ×{repTargetOf(e)}
-                        {repTargetOf(e) > workout.reps && <span style={{ color: "#2FA671", fontWeight: 700 }}> ↑</span>}
-                        {repTargetOf(e) < workout.reps && <span style={{ color: "#B47E10", fontWeight: 700 }}> ↓</span>}
-                      </>
-                    )}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, flexShrink: 0 }}>
+                    <div style={{ fontSize: 13, color: "#6C7686" }}>
+                      {mode === "hiit" ? `${hiit[0]}s` : e.type === "time" ? `${e.secs}s` : (
+                        <>
+                          ×{repTargetOf(e)}
+                          {repTargetOf(e) > workout.reps && <span style={{ color: "#2FA671", fontWeight: 700 }}> ↑</span>}
+                          {repTargetOf(e) < workout.reps && <span style={{ color: "#B47E10", fontWeight: 700 }}> ↓</span>}
+                        </>
+                      )}
+                    </div>
+                    <button
+                      onClick={(ev) => { ev.stopPropagation(); banExercise(e.id); }}
+                      title="Swap it out — and remember I don't like it"
+                      style={{ border: "none", background: "#EFF1F5", borderRadius: 8, padding: "2px 9px", cursor: "pointer", fontSize: 13, lineHeight: 1.4 }}>
+                      👎
+                    </button>
                   </div>
                 </div>
                 {open && (
@@ -1252,7 +1294,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           </div>
           <button onClick={start} style={S.startBtn}>START WORKOUT</button>
           <div style={{ textAlign: "center", fontSize: 12, color: "#9AA3B0" }}>
-            Same day = same workout, drawn from the full library. Tap an exercise for form.
+            Same day = same workout — unless you ⟳ reshuffle. 👎 swaps an exercise out and remembers the dislike. Tap a card for form.
           </div>
         </div>
       </div>
