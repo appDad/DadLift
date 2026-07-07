@@ -546,29 +546,42 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     try { recRef.current && recRef.current.abort(); } catch (e) { /* already stopped */ }
     recRef.current = null;
   };
-  const listenForReps = (slotIndex) => {
-    try {
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SR) return;
-      stopListening();
-      const rec = new SR();
-      recRef.current = rec;
-      rec.lang = "en-US";
-      rec.interimResults = false;
-      rec.maxAlternatives = 3;
-      rec.onresult = (e) => {
-        const alts = Array.from(e.results[0]).map((a) => a.transcript);
-        const n = parseRepCount(alts);
-        if (n == null) return;
-        const slot = sessionLogRef.current[slotIndex];
-        if (slot) slot.value = n;
-        setSummaryRows((prev) => (prev.length > slotIndex ? prev.map((r, i) => (i === slotIndex ? { ...r, value: n } : r)) : prev));
-        setHeard(n);
-        say(`${n}. Logged.`);
-      };
-      rec.onerror = () => { /* no mic / denied — summary editing still works */ };
-      rec.start();
-    } catch (e) { /* unsupported browser */ }
+  /* If followUp is set (HIIT flow), the next-exercise announcement is held back
+     until the user answers or ~7s passes — so speech and mic never fight. */
+  const listenForReps = (slotIndex, followUp = null) => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { if (followUp) say(followUp); return; }
+    stopListening();
+    let rec;
+    try { rec = new SR(); } catch (e) { if (followUp) say(followUp); return; }
+    recRef.current = rec;
+    let settled = false;
+    const settle = (spoken) => {
+      if (settled) return;
+      settled = true;
+      if (recRef.current !== rec) return; // aborted because the workout moved on
+      if (followUp) say(spoken != null ? `${spoken}. Logged. ${followUp}` : followUp);
+      else if (spoken != null) say(`${spoken}. Logged.`);
+    };
+    rec.lang = "en-US";
+    rec.interimResults = false;
+    rec.maxAlternatives = 3;
+    rec.onresult = (e) => {
+      const alts = Array.from(e.results[0]).map((a) => a.transcript);
+      const n = parseRepCount(alts);
+      if (n == null) { settle(null); return; }
+      const slot = sessionLogRef.current[slotIndex];
+      if (slot) slot.value = n;
+      setSummaryRows((prev) => (prev.length > slotIndex ? prev.map((r, i) => (i === slotIndex ? { ...r, value: n } : r)) : prev));
+      setHeard(n);
+      settle(n);
+    };
+    rec.onerror = () => settle(null); // no mic / denied — summary editing still works
+    rec.onend = () => settle(null);
+    try { rec.start(); } catch (e) { settle(null); }
+    setTimeout(() => {
+      if (!settled) { try { rec.abort(); } catch (e) { /* gone */ } settle(null); }
+    }, 7000);
   };
 
   /* record what actually happened for one work slot — feeds the editable summary */
@@ -584,19 +597,37 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
   const advance = (partial = false) => {
     logDone(partial);
-    if (ex.type === "reps" && micOn) {
-      // let the "Rest…" announcement finish, then open the mic for the rep count
-      const slot = sessionLogRef.current.length - 1;
-      setHeard(null);
-      setTimeout(() => listenForReps(slot), 2000);
-    }
     beep(1200, 0.25);
+    const askReps = ex.type === "reps" && micOn;
+    const hiitAsk = mode === "hiit" && askReps; // HIIT: ask FIRST, announce after — no time to wait out the speech
+    const slot = sessionLogRef.current.length - 1;
+
+    const goRest = (announceText, secs) => {
+      setPhase("rest"); setTimeLeft(secs);
+      if (hiitAsk) {
+        setHeard(null);
+        say("How many reps?");
+        setTimeout(() => listenForReps(slot, announceText), 900);
+      } else {
+        say(announceText);
+        if (askReps) {
+          // circuit: announcement first, mic opens during the rest
+          setHeard(null);
+          setTimeout(() => listenForReps(slot), 2000);
+        }
+      }
+    };
+
     if (idx + 1 < exList.length) {
-      setPhase("rest"); setTimeLeft(mode === "hiit" ? hiit[1] : restSecs);
-      say(`Rest. Next up: ${exList[idx + 1].name}`);
+      goRest(`Rest. Next up: ${exList[idx + 1].name}`, mode === "hiit" ? hiit[1] : restSecs);
     } else if (round < rounds) {
-      setPhase("rest"); setTimeLeft(roundRest);
-      say(`Round ${round} done. Long rest.`);
+      goRest(`Round ${round} done. Long rest.`, roundRest);
+    } else if (hiitAsk) {
+      // final set: ask for the count, summary opens underneath and gets the answer
+      setHeard(null);
+      say("How many reps?");
+      setTimeout(() => listenForReps(slot, "Workout complete."), 900);
+      finish(true);
     } else {
       finish();
     }
@@ -634,8 +665,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     setScreen("summary");
   };
 
-  const finish = () => {
-    say("Workout complete.");
+  const finish = (quiet = false) => {
+    if (!quiet) say("Workout complete.");
     openSummary();
   };
 
