@@ -1,7 +1,7 @@
 /* DadLift service worker — minimal app-shell cache.
    Network-first for navigations (fresh deploys win), cache-first for hashed assets.
    Firestore handles its own offline data cache. */
-const CACHE = "dadlift-v3";
+const CACHE = "dadlift-v4";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
