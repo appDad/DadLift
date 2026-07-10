@@ -160,6 +160,87 @@ export const POSES = {
     { L: [...TORSO, ...STAND_LEGS, [50, 26, 44, 32], [50, 26, 56, 32]], head: [50, 14], ball: [[50, 34, 5]], floor: true },
     { L: [...TORSO, ...STAND_LEGS, [50, 26, 58, 30], [50, 26, 58, 34]], head: [50, 14], ball: [[63, 32, 5]], floor: true },
   ],
+  /* ---- legs / lower body (from the dumbbell poster) ---- */
+  sumoSquat: [
+    { L: [[50, 20, 50, 50], [50, 50, 40, 68], [40, 68, 38, 90], [50, 50, 60, 68], [60, 68, 62, 90], [50, 26, 50, 44]], head: [50, 14], db: [[50, 46, 0]], floor: true },
+    { L: [[50, 30, 50, 56], [50, 56, 39, 60], [39, 60, 37, 80], [50, 56, 61, 60], [61, 60, 63, 80], [50, 36, 50, 52]], head: [50, 24], db: [[50, 54, 0]], floor: true },
+  ],
+  bulgarianLunge: [
+    { L: [...TORSO, [50, 52, 48, 72], [48, 72, 48, 90], [50, 52, 60, 66], [60, 66, 68, 72], [50, 30, 45, 48], [50, 30, 55, 48]], head: [50, 14], db: [[45, 50, 0], [55, 50, 0]], floor: true },
+    { L: [[50, 26, 50, 56], [50, 56, 48, 74], [48, 74, 48, 90], [50, 56, 64, 68], [64, 68, 72, 74], [50, 34, 45, 54], [50, 34, 55, 54]], head: [50, 20], db: [[45, 56, 0], [55, 56, 0]], floor: true },
+  ],
+  curtsyLunge: [
+    { L: [...TORSO, ...STAND_LEGS, [50, 28, 45, 46], [50, 28, 55, 46]], head: [50, 14], db: [[45, 48, 0], [55, 48, 0]], floor: true },
+    { L: [[50, 22, 50, 54], [50, 54, 46, 72], [46, 72, 46, 90], [50, 54, 58, 74], [58, 74, 64, 88], [50, 30, 45, 50], [50, 30, 55, 50]], head: [50, 16], db: [[45, 52, 0], [55, 52, 0]], floor: true },
+  ],
+  sideLunge: [
+    { L: [...TORSO, ...STAND_LEGS, [50, 26, 46, 32], [50, 26, 54, 32]], head: [50, 14], db: [[46, 34, 0], [54, 34, 0]], floor: true },
+    { L: [[50, 22, 50, 52], [50, 52, 34, 64], [34, 64, 32, 88], [50, 52, 60, 72], [60, 72, 60, 90], [50, 28, 46, 34], [50, 28, 54, 34]], head: [50, 16], db: [[46, 36, 0], [54, 36, 0]], floor: true },
+  ],
+  gluteBridge: [
+    { L: [[28, 82, 48, 82], [48, 82, 58, 70], [58, 70, 66, 82], [42, 82, 42, 76]], head: [24, 82], db: [[48, 80, 0]], floor: true },
+    { L: [[28, 82, 46, 72], [46, 72, 58, 64], [58, 64, 66, 82], [42, 74, 42, 68]], head: [24, 82], db: [[46, 70, 0]], floor: true },
+  ],
+  calfRaise: [
+    { L: [...TORSO, ...STAND_LEGS, [50, 28, 44, 48], [50, 28, 56, 48]], head: [50, 14], db: [[44, 50, 0], [56, 50, 0]], floor: true },
+    { L: [[50, 16, 50, 48], [50, 48, 44, 66], [44, 66, 44, 86], [50, 48, 56, 66], [56, 66, 56, 86], [50, 24, 44, 44], [50, 24, 56, 44]], head: [50, 10], db: [[44, 46, 0], [56, 46, 0]], floor: true },
+  ],
+  donkeyKick: [
+    { L: [[34, 64, 62, 64], [34, 64, 30, 84], [34, 64, 36, 84], [62, 64, 58, 84], [62, 64, 66, 84]], head: [30, 61], floor: true },
+    { L: [[34, 64, 62, 64], [34, 64, 30, 84], [34, 64, 36, 84], [62, 64, 58, 84], [62, 64, 76, 58], [76, 58, 72, 50]], head: [30, 61], floor: true },
+  ],
+  fireHydrant: [
+    { L: [[34, 64, 62, 64], [34, 64, 30, 84], [34, 64, 36, 84], [62, 64, 58, 84], [62, 64, 66, 84]], head: [30, 61], floor: true },
+    { L: [[34, 64, 62, 64], [34, 64, 30, 84], [34, 64, 36, 84], [62, 64, 58, 84], [62, 64, 76, 64], [76, 64, 80, 74]], head: [30, 61], floor: true },
+  ],
+  hamstringCurl: [
+    { L: [[30, 80, 58, 80], [58, 80, 78, 80]], head: [26, 77], db: [[80, 80, 90]], floor: true },
+    { L: [[30, 80, 58, 80], [58, 80, 64, 66], [64, 66, 60, 60]], head: [26, 77], db: [[59, 58, 90]], floor: true },
+  ],
+  legExtension: [
+    { L: [[44, 54, 44, 70], [44, 70, 56, 70], [56, 70, 56, 86]], head: [44, 48], db: [[56, 88, 0]], floor: true },
+    { L: [[44, 54, 44, 70], [44, 70, 56, 70], [56, 70, 72, 64]], head: [44, 48], db: [[74, 63, 0]], floor: true },
+  ],
+  stepUp: [
+    { L: [[60, 22, 60, 52], [60, 52, 44, 76], [60, 52, 58, 72], [58, 72, 58, 90], [60, 28, 56, 46], [60, 28, 64, 46], [28, 74, 46, 74], [46, 74, 46, 90], [28, 74, 28, 90]], head: [60, 16], db: [[56, 48, 0], [64, 48, 0]], floor: true },
+    { L: [[38, 18, 38, 46], [38, 46, 34, 64], [34, 64, 34, 74], [38, 46, 42, 64], [42, 64, 42, 74], [38, 24, 34, 42], [38, 24, 42, 42], [28, 74, 50, 74], [50, 74, 50, 90], [28, 74, 28, 90]], head: [38, 12], db: [[34, 44, 0], [42, 44, 0]], floor: true },
+  ],
+  thruster: [
+    { L: [[50, 30, 50, 54], [50, 54, 40, 60], [40, 60, 38, 80], [50, 54, 60, 60], [60, 60, 62, 80], [50, 34, 44, 38], [50, 34, 56, 38]], head: [50, 24], db: [[44, 36, 0], [56, 36, 0]], floor: true },
+    { L: [...TORSO, ...STAND_LEGS, [50, 22, 44, 10], [50, 22, 56, 10]], head: [50, 14], db: [[43, 8, 0], [57, 8, 0]], floor: true },
+  ],
+  burpee: [
+    { L: [...TORSO, ...STAND_LEGS, [50, 22, 44, 12], [50, 22, 56, 12]], head: [50, 14], floor: true },
+    { L: [[32, 60, 56, 68], [56, 68, 76, 84], [32, 60, 30, 84], [32, 60, 36, 84]], head: [28, 55], floor: true },
+  ],
+  swing: [
+    { L: [[50, 30, 66, 40], [50, 30, 48, 60], [48, 60, 48, 88], [50, 30, 54, 60], [54, 60, 54, 88], [63, 42, 58, 54]], head: [70, 36], db: [[57, 56, 0]], floor: true },
+    { L: [...TORSO, ...STAND_LEGS, [50, 26, 66, 26]], head: [50, 14], db: [[70, 26, 0]], floor: true },
+  ],
+  lRaise: [
+    { L: [...TORSO, ...STAND_LEGS, [50, 24, 46, 42], [50, 24, 54, 42]], head: [50, 14], db: [[46, 44, 0], [54, 44, 0]], floor: true },
+    { L: [...TORSO, ...STAND_LEGS, [50, 24, 40, 24], [40, 24, 40, 14], [50, 24, 60, 24], [60, 24, 60, 14]], head: [50, 14], db: [[40, 12, 0], [60, 12, 0]], floor: true },
+  ],
+  curlPress: [
+    { L: [...TORSO, ...STAND_LEGS, [50, 26, 47, 42], [47, 42, 47, 50], [50, 26, 53, 42], [53, 42, 53, 50]], head: [50, 14], db: [[47, 52, 0], [53, 52, 0]], floor: true },
+    { L: [...TORSO, ...STAND_LEGS, [50, 22, 44, 10], [50, 22, 56, 10]], head: [50, 14], db: [[43, 8, 0], [57, 8, 0]], floor: true },
+  ],
+  wristCurl: [
+    { L: [[44, 54, 44, 68], [44, 68, 58, 68], [58, 68, 58, 74]], head: [44, 48], db: [[58, 78, 0]], floor: true },
+    { L: [[44, 54, 44, 68], [44, 68, 58, 68], [58, 68, 58, 70]], head: [44, 48], db: [[58, 64, 0]], floor: true },
+  ],
+  benchPress: [
+    { L: [[26, 80, 74, 80], [36, 74, 58, 74], [58, 74, 64, 64], [64, 64, 70, 74], [40, 73, 32, 68]], head: [32, 71], db: [[30, 66, 90]], floor: true },
+    { L: [[26, 80, 74, 80], [36, 74, 58, 74], [58, 74, 64, 64], [64, 64, 70, 74], [40, 73, 40, 58]], head: [32, 71], db: [[40, 55, 90]], floor: true },
+  ],
+  floorTRaise: [
+    { L: [[32, 80, 68, 80], [46, 80, 30, 74], [54, 80, 70, 74]], head: [27, 78], db: [[28, 73, 90], [72, 73, 90]], floor: true },
+    { L: [[34, 78, 66, 78], [46, 78, 28, 68], [54, 78, 72, 68]], head: [29, 74], db: [[26, 66, 90], [74, 66, 90]], floor: true },
+  ],
+  birdDogRow: [
+    { L: [[36, 62, 62, 64], [62, 64, 58, 84], [62, 64, 66, 84], [36, 62, 34, 84], [36, 62, 40, 74]], head: [32, 59], db: [[40, 84, 0]], floor: true },
+    { L: [[36, 62, 62, 64], [62, 64, 58, 84], [62, 64, 66, 84], [36, 62, 34, 84], [36, 62, 42, 60]], head: [32, 59], db: [[43, 58, 0]], floor: true },
+  ],
 };
 
 /* ============ built-in exercise database ============ */
@@ -169,6 +250,7 @@ export const GROUPS = {
   shoulders: { label: "Shoulders", color: "#F2B134" },
   arms: { label: "Arms", color: "#E85D5D" },
   core: { label: "Core", color: "#46C98B" },
+  legs: { label: "Legs", color: "#0FA3A3" },
 };
 
 export const BUILTIN = [
@@ -224,6 +306,29 @@ export const BUILTIN = [
   { id: "sqp", grp: "chest", name: "Squeeze Press", type: "reps", pose: "floorPress", cue: "Press the dumbbells together hard over your chest and keep squeezing as you lower and press. Constant tension." },
   { id: "wpu", grp: "chest", name: "Wide Push-Up", type: "reps", pose: "pushup", cue: "Hands wider than your shoulders. Chest to the floor, press up. Elbows about 45° from your body." },
   { id: "mbs", grp: "chest", name: "Ball Squeeze Press-Out", type: "reps", pose: "chestSqueeze", cue: "Crush the ball between your palms at chest height, press it straight out, pull it back in. Never stop crushing." },
+  /* ---- legs / lower body (from the dumbbell poster) ---- */
+  { id: "ssq", grp: "legs", name: "Sumo Squat", type: "reps", pose: "sumoSquat", cue: "Wide stance, toes turned out, one dumbbell hanging between your legs or held at your chest. Sit straight down, drive through your heels to stand." },
+  { id: "bul", grp: "legs", name: "Bulgarian Split Squat", type: "reps", pose: "bulgarianLunge", cue: "Rear foot elevated behind you, dumbbells at your sides. Lower straight down until your front thigh is parallel, drive back up. Count is per side." },
+  { id: "cly", grp: "legs", name: "Curtsy Lunge", type: "reps", pose: "curtsyLunge", cue: "Step one leg diagonally behind the other like a curtsy, lower your hips, return to standing. Hits the glutes. Count is per side." },
+  { id: "slt", grp: "legs", name: "Side Lunge", type: "reps", pose: "sideLunge", cue: "Step wide to one side, sit back into that hip keeping the other leg straight, push back to center. Count is per side." },
+  { id: "stp", grp: "legs", name: "Step-Up", type: "reps", pose: "stepUp", cue: "Dumbbells at your sides. Step one foot onto a sturdy box or bench, drive up to standing on it, step down with control. Count is per side." },
+  { id: "gbr", grp: "legs", name: "Glute Bridge", type: "reps", pose: "gluteBridge", cue: "On your back, knees bent, a dumbbell across your hips. Drive your hips to the ceiling, squeeze your glutes hard at the top, lower slow." },
+  { id: "clf", grp: "legs", name: "Calf Raise", type: "reps", pose: "calfRaise", cue: "Dumbbells at your sides. Rise up onto the balls of your feet as high as you can, pause, lower slow. Full range every rep." },
+  { id: "dkk", grp: "legs", name: "Donkey Kick", type: "time", secs: 40, pose: "donkeyKick", cue: "On all fours. Keeping your knee bent, drive one heel toward the ceiling, squeeze the glute, lower without touching down. Switch sides halfway." },
+  { id: "fhy", grp: "legs", name: "Fire Hydrant", type: "time", secs: 40, pose: "fireHydrant", cue: "On all fours. Lift one bent knee out to the side like a dog at a hydrant. Keep your hips square. Switch sides halfway." },
+  { id: "hmc", grp: "legs", name: "Hamstring Curl", type: "reps", pose: "hamstringCurl", cue: "Face down, a dumbbell squeezed between your feet. Curl your heels toward your glutes, lower slow. Keep your hips pressed down." },
+  { id: "lex", grp: "legs", name: "Leg Extension", type: "reps", pose: "legExtension", cue: "Seated on a bench, a dumbbell held between your feet. Straighten your knees to lift, squeeze your quads, lower slow." },
+  { id: "thr", grp: "legs", name: "Dumbbell Thruster", type: "reps", pose: "thruster", cue: "Dumbbells at your shoulders. Squat down, then explode up and press the weights straight overhead in one motion. Full-body burner." },
+  /* ---- compound / conditioning ---- */
+  { id: "swg", grp: "back", name: "Dumbbell Swing", type: "reps", pose: "swing", cue: "One dumbbell in both hands. Hinge at the hips, swing it back between your legs, then snap your hips to swing it up to shoulder height. Power from the hips, not the arms." },
+  { id: "bur", grp: "core", name: "Burpee", type: "reps", pose: "burpee", cue: "From standing, drop your hands to the floor, kick back to a plank, jump your feet back in and stand or jump up. Full send." },
+  /* ---- upper body (poster gaps) ---- */
+  { id: "lrs", grp: "shoulders", name: "L Raise", type: "reps", pose: "lRaise", cue: "Elbows bent to 90 at your sides. Raise your upper arms out to shoulder height, forearms pointing up in an L. Great for rear delts and cuff." },
+  { id: "cop", grp: "arms", name: "Curl to Overhead Press", type: "reps", pose: "curlPress", cue: "Curl the dumbbells to your shoulders, then press them straight overhead, and reverse the whole path down. One rep is the full sequence." },
+  { id: "wrc", grp: "arms", name: "Wrist Curl", type: "reps", pose: "wristCurl", cue: "Forearms resting on your thighs, palms up, dumbbells in hand. Curl at the wrists only, let them roll to your fingertips, curl back up. Builds grip." },
+  { id: "bnp", grp: "chest", name: "Dumbbell Bench Press", type: "reps", pose: "benchPress", cue: "Lying on a bench, dumbbells pressed above your chest. Lower to chest level with elbows about 45 degrees, press back up to lockout." },
+  { id: "ftr", grp: "back", name: "Floor T Raise", type: "reps", pose: "floorTRaise", cue: "Face down, arms straight out to the sides in a T with light dumbbells. Lift your chest and arms, squeeze your shoulder blades, lower slow." },
+  { id: "bdr", grp: "back", name: "Bird Dog Row", type: "reps", pose: "birdDogRow", cue: "On all fours or a staggered stance, row one dumbbell from the floor to your ribs without twisting your hips. Anti-rotation plus back. Count is per side." },
 ];
 
 /* equipment tags: "db" dumbbells, "ball" med ball, untagged = bodyweight only */
@@ -234,6 +339,10 @@ const EQUIP_TAGS = {
   sb: "db", ppt: "db", fp: "db", fly: "db", sqp: "db",
   frr: "ball", hal: "ball", cgp: "ball", rt: "ball", slm: "ball", wsu: "ball",
   db: "ball", vup: "ball", wc: "ball", mbs: "ball",
+  // legs + poster additions
+  ssq: "db", bul: "db", cly: "db", slt: "db", stp: "box", gbr: "db", clf: "db",
+  hmc: "db", lex: "bench", thr: "db", swg: "db", lrs: "db", cop: "db", wrc: "db",
+  bnp: "bench", ftr: "db", bdr: "db", // dkk/fhy/bur = bodyweight (no tag)
 };
 BUILTIN.forEach((e) => { if (EQUIP_TAGS[e.id]) e.eq = EQUIP_TAGS[e.id]; });
 
