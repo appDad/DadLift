@@ -598,6 +598,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [voiceOn, setVoiceOn] = useState(true);
   const [round, setRound] = useState(1);
   const [idx, setIdx] = useState(0);
+  const [sessionRounds, setSessionRounds] = useState(2); // rounds for the RUNNING session (quick = 1)
+  const [quickEx, setQuickEx] = useState(null); // active do-anywhere list, null = today's workout
   const [phase, setPhase] = useState("work"); // work | rest | ready (get-set countdown, circuit only)
   const [timeLeft, setTimeLeft] = useState(0);
   const [rep, setRep] = useState(0);
@@ -673,7 +675,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     ),
     [today, availEx, emphasis, ratings, shuffleN, excluded]
   );
-  const exList = workout.exercises;
+  const exList = quickEx || workout.exercises;
   const ex = exList[idx];
   const repTargets = useMemo(() => {
     const t = {};
@@ -1034,7 +1036,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
     if (idx + 1 < exList.length) {
       goRest(`Rest. Next up: ${exList[idx + 1].name}`, mode === "hiit" ? hiit[1] : restSecs);
-    } else if (round < rounds) {
+    } else if (round < sessionRounds) {
       goRest(`Round ${round} done. Long rest.`, roundRest);
     } else if (askReps) {
       // final set: ask for the count, summary opens underneath and gets the answer
@@ -1061,7 +1063,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     const log = sessionLogRef.current;
     const rows = [];
     let k = 0;
-    for (let r = 1; r <= rounds; r++) {
+    for (let r = 1; r <= sessionRounds; r++) {
       for (const e of exList) {
         rows.push({
           id: e.id,
@@ -1092,7 +1094,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       const progress = ex.type === "reps" && mode !== "hiit" ? repRef.current > 0 : elapsed > 0;
       if (progress) logDone(true); // partial — excluded from target adaptation
     }
-    if (sessionLogRef.current.length === 0) { setScreen("home"); return; }
+    if (sessionLogRef.current.length === 0) { setQuickEx(null); setScreen("home"); return; }
     openSummary();
   };
 
@@ -1104,7 +1106,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     const groups = {};
     done.forEach((r) => { groups[r.grp] = (groups[r.grp] || 0) + 1; });
     const entry = {
-      d: ymd(today), ts: Date.now(), rounds, reps: workout.reps, n: exList.length, mode,
+      d: ymd(today), ts: Date.now(), rounds: sessionRounds, reps: workout.reps, n: exList.length, mode,
+      quick: quickEx ? true : undefined,
       exDone: done.length,
       totalReps: done.filter((r) => r.unit === "reps").reduce((s, r) => s + r.value, 0),
       totalSecs: done.filter((r) => r.unit === "s").reduce((s, r) => s + r.value, 0),
@@ -1122,6 +1125,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     if (share.on && share.id) publishSnapshot(user.uid, firstName(), newHist, share.id);
     setLastEntry(entry);
     setDoneExList(exList);
+    setQuickEx(null); // session over — home shows today's regular workout again
     setScreen("done");
     const summary = `${entry.exDone} exercise sets, ${entry.totalReps} reps total (${entry.exercises.join(", ") || "nothing finished"})`;
     fetchCoachLine(newHist, summary).then(setCoachLine);
@@ -1202,15 +1206,36 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen, phase, idx, round, mode, paused, side]);
 
-  const start = () => {
+  const launch = (list) => {
     setRound(1); setIdx(0);
     savedRef.current = false; setCoachLine(null); setLastEntry(null);
-    stopListening(); setHeard(null); setPaused(false);
+    stopListening(); setHeard(null); setPaused(false); setManualReps(""); setRelisten(false);
     sessionLogRef.current = [];
-    beginSet(exList[0]);
+    beginSet(list[0]);
     setScreen("player");
     beep(660, 0.15);
-    say(`First up: ${exList[0].name}.${mode !== "hiit" && readySecs > 0 ? " Get set." : ""}`);
+    say(`First up: ${list[0].name}.${mode !== "hiit" && readySecs > 0 ? " Get set." : ""}`);
+  };
+
+  const start = () => {
+    setQuickEx(null);
+    setSessionRounds(rounds);
+    launch(workout.exercises);
+  };
+
+  /* do-anywhere: one bodyweight exercise per group, single round —
+     transient session, saved equipment/settings untouched */
+  const startAnywhere = () => {
+    const rng = mulberry32(dateSeed(today) * 7 + 13 + shuffleN * 131071);
+    const picks = [];
+    for (const g of Object.keys(GROUPS)) {
+      const gp = allEx.filter((e) => e.grp === g && !e.eq && !excluded.includes(e.id));
+      picks.push(...weightedPick(gp, 1, rng, ratings));
+    }
+    if (!picks.length) return;
+    setQuickEx(picks);
+    setSessionRounds(1);
+    launch(picks);
   };
 
   const S = styles;
@@ -1272,7 +1297,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "10px 16px 16px" }}>
           {summaryRows.map((r, i) => (
             <React.Fragment key={i}>
-              {rounds > 1 && i % exList.length === 0 && (
+              {sessionRounds > 1 && i % exList.length === 0 && (
                 <div style={{ ...S.settingsLabel, marginTop: i === 0 ? 0 : 12 }}>ROUND {r.round}</div>
               )}
               <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#FFFFFF", borderRadius: 10, padding: "8px 12px" }}>
@@ -1297,7 +1322,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           <button onClick={saveSummary} style={S.startBtn}>
             SAVE WORKOUT — {doneCount} SET{doneCount === 1 ? "" : "S"}
           </button>
-          <button onClick={() => { stopListening(); setScreen("home"); }} style={{ ...S.ghostBtn, color: "#E85D5D" }}>discard, save nothing</button>
+          <button onClick={() => { stopListening(); setQuickEx(null); setScreen("home"); }} style={{ ...S.ghostBtn, color: "#E85D5D" }}>discard, save nothing</button>
         </div>
       </div>
     );
@@ -1479,6 +1504,10 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
             ))}
           </div>
           <button onClick={start} style={S.startBtn}>START WORKOUT</button>
+          <button onClick={startAnywhere}
+            style={{ ...S.startBtn, fontSize: 16, padding: "12px 0", background: "#E4E7EC", color: "#1B2430" }}>
+            ⚡ DO-ANYWHERE — QUICK BODYWEIGHT, 1 ROUND
+          </button>
           <div style={{ textAlign: "center", fontSize: 12, color: "#9AA3B0" }}>
             Same day = same workout — tap ⟳ RESHUFFLE for a new draw. 👍 favorites an exercise (shows more), 👎 swaps it out (shows less). Tap a card for form.
           </div>
@@ -1534,7 +1563,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const isRest = phase === "rest";
   const isReady = phase === "ready";
   const lastRec = sessionLogRef.current[sessionLogRef.current.length - 1];
-  const nextEx = idx + 1 < exList.length ? exList[idx + 1] : round < rounds ? exList[0] : null;
+  const nextEx = idx + 1 < exList.length ? exList[idx + 1] : round < sessionRounds ? exList[0] : null;
   const shown = isRest && nextEx ? nextEx : ex;
   const shownG = GROUPS[shown.grp];
   const total = isRest
@@ -1549,7 +1578,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button onClick={quitWorkout} style={S.ghostBtn}>✕ end</button>
         <div style={{ fontSize: 13, color: paused ? "#B47E10" : "#6C7686", letterSpacing: 1, fontWeight: paused ? 700 : 400 }}>
-          {paused ? "PAUSED" : <>ROUND {round}/{rounds} · {idx + 1}/{exList.length}</>}
+          {paused ? "PAUSED" : <>{quickEx ? "DO-ANYWHERE · " : ""}ROUND {round}/{sessionRounds} · {idx + 1}/{exList.length}</>}
         </div>
         <button onClick={() => (isRest ? startNext() : advance(true))} style={S.ghostBtn}>skip ›</button>
       </div>
