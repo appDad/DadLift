@@ -29,6 +29,16 @@ const isUnilateral = (e) => {
   if (/alternat/i.test(t)) return false;
   return /per side|single[- ](arm|leg)|one (arm|leg|hand|side)|each (side|arm|leg)/i.test(t);
 };
+/* default two-pass flag (user can override per exercise from the library) */
+const autoUnilateral = (e) => {
+  if (!e) return false;
+  if (e.type === "time") {
+    const t = `${e.name || ""} ${e.cue || ""}`;
+    if (/alternat/i.test(t)) return false;
+    return /halfway|do both sides|per side/i.test(t);
+  }
+  return isUnilateral(e);
+};
 
 /* ============ daily workout builder ============ */
 /* thumbs bias the deterministic picker: 👍 3x weight, 👎 0.4x, neutral 1x */
@@ -401,7 +411,7 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
 }
 
 /* ============ library screen ============ */
-function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, communityBy, onHide, ownedEquip, onSetEq }) {
+function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, communityBy, onHide, ownedEquip, onSetEq, uniOf, onToggleUni }) {
   const [tab, setTab] = useState("browse"); // browse | add | export
   const [pasteVal, setPasteVal] = useState("");
   const [msg, setMsg] = useState(null);
@@ -510,6 +520,17 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, comm
                         ) : (
                           <span>{e.eq ? (EQUIPMENT[e.eq] ? EQUIPMENT[e.eq].label : e.eq) : "bodyweight"}</span>
                         )}
+                        <button
+                          onClick={(ev) => { ev.stopPropagation(); onToggleUni(e); }}
+                          title="Run this exercise twice — once per side/direction"
+                          style={{
+                            border: "none", borderRadius: 6, padding: "2px 8px", fontSize: 11, cursor: "pointer",
+                            background: uniOf(e) ? "#DCE7FB" : "#EFF1F5",
+                            color: uniOf(e) ? "#2456B3" : "#6C7686",
+                            outline: uniOf(e) ? "1.5px solid #5B8DEF" : "none",
+                          }}>
+                          {uniOf(e) ? "per-side ✓" : "per-side"}
+                        </button>
                       </div>
                     </div>
                     <Thumbs value={ratings[e.id] || 0} onChange={(v) => onRate(e.id, v)} />
@@ -593,6 +614,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [micOn, setMicOn] = useState(true);
   const [heard, setHeard] = useState(null); // last spoken rep count picked up by the mic
   const [ratings, setRatings] = useState({}); // exercise id -> 1 | 0 | -1
+  const [uniOverride, setUniOverride] = useState({}); // exercise id -> true/false two-pass override
   const [community, setCommunity] = useState([]); // [{ex, by}] shared by other users
   const [hiddenComm, setHiddenComm] = useState([]); // community ids hidden from MY instance
   const [equip, setEquip] = useState({}); // equipment key -> false when I don't have it (default: have it)
@@ -663,6 +685,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     (async () => {
       setHistory(await loadJSON("history", []));
       setRatings(await loadJSON("ratings", {}));
+      setUniOverride(await loadJSON("unilateral", {}));
       setHiddenComm(await loadJSON("hiddencomm", []));
       setShare(await loadJSON("share", { id: null, on: false }));
       // merge admin catalog extensions BEFORE community loads — community
@@ -749,6 +772,15 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     if (v === 0) delete next[id]; else next[id] = v;
     setRatings(next);
     saveJSON("ratings", next);
+  };
+
+  /* two-pass (per-side) control: explicit override wins, else auto-detected */
+  const effUni = (e) => (e && uniOverride[e.id] != null ? uniOverride[e.id] : autoUnilateral(e));
+  const toggleUni = (e) => {
+    const next = { ...uniOverride, [e.id]: !effUni(e) };
+    if (next[e.id] === autoUnilateral(e)) delete next[e.id]; // back to default — drop the override
+    setUniOverride(next);
+    saveJSON("unilateral", next);
   };
 
   const clearHistory = () => {
@@ -899,7 +931,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const setSideBoth = (v) => { sideRef.current = v; setSide(v); };
   const beginSet = (exObj) => {
     setRep(0); repRef.current = 0;
-    setSideBoth(mode !== "hiit" && exObj.type === "reps" && isUnilateral(exObj) ? "L" : null);
+    // two-pass applies to reps AND timed sets in circuit (HIIT stays interval-based)
+    setSideBoth(mode !== "hiit" && effUni(exObj) ? "L" : null);
     if (mode !== "hiit" && readySecs > 0) {
       setPhase("ready");
       timeLeftRef.current = readySecs;
@@ -1049,11 +1082,11 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       setTimeLeft(v0);
       return;
     }
-    // timed sides: cue-declared halfway switches, plus HIIT AMRAP unilateral sets
+    // halfway switch call: only when a set is NOT running as two-pass —
+    // circuit timed sets whose cue says halfway, and any HIIT unilateral set
     const workTotal = mode === "hiit" ? hiit[0] : (ex && ex.secs) || 0;
-    const halfSwitch = phase === "work" && ex && (
-      (ex.type === "time" && /halfway|do both sides/i.test(ex.cue || "")) ||
-      (mode === "hiit" && ex.type === "reps" && isUnilateral(ex))
+    const halfSwitch = phase === "work" && ex && !sideRef.current && (
+      mode === "hiit" ? effUni(ex) : (ex.type === "time" && /halfway|do both sides/i.test(ex.cue || ""))
     );
     const t = setInterval(() => {
       setTimeLeft((v) => {
@@ -1064,10 +1097,18 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
             // countdown done — go (the work-init branch above refills timed sets)
             setPhase("work");
             const s = sideRef.current;
-            say(s === "L" ? "Left side. Go." : s === "R" ? "Right side. Go." : "Go.");
+            const timedSet = ex && ex.type === "time";
+            say(s === "L" ? (timedSet ? "First side. Go." : "Left side. Go.")
+              : s === "R" ? (timedSet ? "Second side. Go." : "Right side. Go.")
+              : "Go.");
             return 0;
           }
-          if (phase === "work") advance(); else startNext();
+          if (phase === "work") {
+            // two-pass timed set: first side done -> switch, second side -> advance
+            if (sideRef.current === "L") switchToRight(); else advance();
+          } else {
+            startNext();
+          }
           return 0;
         }
         if (v <= 4) beep(880, 0.1);
@@ -1126,6 +1167,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     return <Library allEx={allEx} custom={customEx} onAdd={addCustom} onRemove={removeCustom}
       ratings={ratings} onRate={rate} communityBy={communityBy} onHide={hideCommunity}
       ownedEquip={equipKeys.filter(haveEquip)} onSetEq={setCustomEq}
+      uniOf={effUni} onToggleUni={toggleUni}
       onBack={() => setScreen("home")} />;
   }
   if (screen === "settings") {
@@ -1309,6 +1351,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                           {repTargetOf(e) < workout.reps && <span style={{ color: "#B47E10", fontWeight: 700 }}> ↓</span>}
                         </>
                       )}
+                      {mode !== "hiit" && effUni(e) && <span style={{ color: "#5B8DEF", fontWeight: 700 }}> ×2</span>}
                     </div>
                     <div style={{ display: "flex", gap: 4 }}>
                       <button
@@ -1447,7 +1490,9 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "0 20px", textAlign: "center" }}>
         <div style={{ fontSize: 12, letterSpacing: 2, fontWeight: 700, color: shownG.color, textTransform: "uppercase" }}>
-          {isRest ? "REST — UP NEXT" : isReady ? "GET SET" + (side === "L" ? " — LEFT SIDE" : side === "R" ? " — RIGHT SIDE" : "") : shownG.label}
+          {isRest ? "REST — UP NEXT"
+            : isReady ? "GET SET" + (side === "L" ? (ex.type === "time" ? " — SIDE 1" : " — LEFT SIDE") : side === "R" ? (ex.type === "time" ? " — SIDE 2" : " — RIGHT SIDE") : "")
+            : shownG.label}
         </div>
         <div style={{ fontFamily: DISPLAY, fontSize: 30, fontWeight: 700, letterSpacing: 0.5 }}>{shown.name}</div>
 
@@ -1461,7 +1506,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           <Ring total={total} left={timeLeft} color={isRest ? "#6C7686" : isReady ? "#B47E10" : g.color}>
             <div style={{ fontFamily: DISPLAY, fontSize: 64, fontWeight: 700, lineHeight: 1 }}>{timeLeft}</div>
             <div style={{ fontSize: 12, color: "#6C7686", letterSpacing: 1 }}>
-              {isRest ? "REST" : isReady ? "GET SET" : mode === "hiit" && ex.type === "reps" ? "MAX REPS" : "SECONDS"}
+              {isRest ? "REST" : isReady ? "GET SET" : mode === "hiit" && ex.type === "reps" ? "MAX REPS"
+                : `${side === "L" ? "SIDE 1 · " : side === "R" ? "SIDE 2 · " : ""}SECONDS`}
             </div>
           </Ring>
         ) : (
