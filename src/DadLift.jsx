@@ -626,6 +626,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [share, setShare] = useState({ id: null, on: false }); // public progress page
   const [shareCopied, setShareCopied] = useState(false);
   const [settingsFocus, setSettingsFocus] = useState(null); // "equip" scrolls settings to that section
+  const [homeTab, setHomeTab] = useState("full"); // full workout | burn on the go
   const [extEquip, setExtEquip] = useState({}); // admin-added catalog entries (config/equipment)
   const [shuffleN, setShuffleN] = useState(0); // today's reshuffle count — new seed each press
   const [excluded, setExcluded] = useState([]); // exercises thumbed out of TODAY'S workout
@@ -675,13 +676,24 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     ),
     [today, availEx, emphasis, ratings, shuffleN, excluded]
   );
+  /* burn-on-the-go: one bodyweight exercise per group, same seeded picker */
+  const anywhereWorkout = useMemo(() => {
+    const rng = mulberry32(dateSeed(today) * 7 + 13 + shuffleN * 131071);
+    const picks = [];
+    for (const g of Object.keys(GROUPS)) {
+      const gp = allEx.filter((e) => e.grp === g && !e.eq && !excluded.includes(e.id));
+      picks.push(...weightedPick(gp, 1, rng, ratings));
+    }
+    return picks;
+  }, [today, allEx, excluded, ratings, shuffleN]);
+
   const exList = quickEx || workout.exercises;
   const ex = exList[idx];
   const repTargets = useMemo(() => {
     const t = {};
-    for (const e of exList) if (e.type === "reps") t[e.id] = adaptTarget(e.id, workout.reps, history);
+    for (const e of [...exList, ...anywhereWorkout]) if (e.type === "reps") t[e.id] = adaptTarget(e.id, workout.reps, history);
     return t;
-  }, [exList, workout.reps, history]);
+  }, [exList, anywhereWorkout, workout.reps, history]);
   const repTargetOf = (e) => repTargets[e.id] || workout.reps;
   const say = (t) => { if (voiceOn) speak(t); };
 
@@ -1223,19 +1235,12 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     launch(workout.exercises);
   };
 
-  /* do-anywhere: one bodyweight exercise per group, single round —
-     transient session, saved equipment/settings untouched */
+  /* burn-on-the-go: transient session, saved equipment/settings untouched */
   const startAnywhere = () => {
-    const rng = mulberry32(dateSeed(today) * 7 + 13 + shuffleN * 131071);
-    const picks = [];
-    for (const g of Object.keys(GROUPS)) {
-      const gp = allEx.filter((e) => e.grp === g && !e.eq && !excluded.includes(e.id));
-      picks.push(...weightedPick(gp, 1, rng, ratings));
-    }
-    if (!picks.length) return;
-    setQuickEx(picks);
+    if (!anywhereWorkout.length) return;
+    setQuickEx(anywhereWorkout);
     setSessionRounds(1);
-    launch(picks);
+    launch(anywhereWorkout);
   };
 
   const S = styles;
@@ -1330,6 +1335,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
   /* ---------- HOME ---------- */
   if (screen === "home") {
+    const homeList = homeTab === "go" ? anywhereWorkout : exList;
+    const cardHiit = homeTab !== "go" && mode === "hiit";
     return (
       <div style={S.app}>
         <style>{FONT_CSS}</style>
@@ -1371,6 +1378,21 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           ))}
         </div>
 
+        <div style={{ display: "flex", gap: 8, padding: "0 16px 14px" }}>
+          {[["full", "FULL WORKOUT"], ["go", "🔥 BURN ON THE GO"]].map(([k, label]) => (
+            <button key={k} onClick={() => setHomeTab(k)}
+              style={{
+                ...S.pill, flex: 1, padding: "11px 0", borderRadius: 12,
+                fontFamily: DISPLAY, fontSize: 17, fontWeight: 700, letterSpacing: 1,
+                background: homeTab === k ? "#1B2430" : "#E4E7EC",
+                color: homeTab === k ? "#F5F6F8" : "#3D4756",
+              }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {homeTab === "full" && (
         <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "10px 14px", margin: "0 16px 14px" }}>
           <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, marginBottom: 8 }}>
             TODAY'S EQUIPMENT — TAP WHAT YOU HAVE
@@ -1399,16 +1421,19 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
             {availEx.length} of {allEx.length} exercises fit today's gear. Add new equipment in settings.
           </div>
         </div>
+        )}
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px 8px" }}>
-          <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700 }}>TODAY'S WORKOUT</div>
+          <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700 }}>
+            {homeTab === "go" ? "BURN ON THE GO — NO EQUIPMENT · 1 ROUND" : "TODAY'S WORKOUT"}
+          </div>
           <button onClick={reshuffle}
             style={{ ...S.pill, padding: "8px 16px", fontSize: 13, fontWeight: 700, background: "#5B8DEF", color: "#FFFFFF" }}>
             ⟳ RESHUFFLE
           </button>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px" }}>
-          {exList.map((e) => {
+          {homeList.map((e) => {
             const g = GROUPS[e.grp];
             const open = preview === e.id;
             return (
@@ -1424,7 +1449,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, flexShrink: 0 }}>
                     <div style={{ fontSize: 13, color: "#6C7686" }}>
-                      {mode === "hiit" ? `${hiit[0]}s` : e.type === "time" ? `${e.secs}s` : (
+                      {cardHiit ? `${hiit[0]}s` : e.type === "time" ? `${e.secs}s` : (
                         <>
                           ×{repTargetOf(e)}
                           {repTargetOf(e) > workout.reps && <span style={{ color: "#2FA671", fontWeight: 700 }}> ↑</span>}
@@ -1471,6 +1496,14 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           })}
         </div>
 
+        {homeTab === "go" ? (
+        <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+          <button onClick={startAnywhere} style={S.startBtn}>🔥 START BURN — NO EQUIPMENT</button>
+          <div style={{ textAlign: "center", fontSize: 12, color: "#9AA3B0" }}>
+            One bodyweight move per muscle group, single round, ~10–15 minutes. Counts toward your streak — your equipment and settings stay untouched.
+          </div>
+        </div>
+        ) : (
         <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", alignItems: "center" }}>
             <span style={{ fontSize: 10, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>FOCUS</span>
@@ -1504,14 +1537,11 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
             ))}
           </div>
           <button onClick={start} style={S.startBtn}>START WORKOUT</button>
-          <button onClick={startAnywhere}
-            style={{ ...S.startBtn, fontSize: 16, padding: "12px 0", background: "#E4E7EC", color: "#1B2430" }}>
-            ⚡ DO-ANYWHERE — QUICK BODYWEIGHT, 1 ROUND
-          </button>
           <div style={{ textAlign: "center", fontSize: 12, color: "#9AA3B0" }}>
             Same day = same workout — tap ⟳ RESHUFFLE for a new draw. 👍 favorites an exercise (shows more), 👎 swaps it out (shows less). Tap a card for form.
           </div>
         </div>
+        )}
       </div>
     );
   }
