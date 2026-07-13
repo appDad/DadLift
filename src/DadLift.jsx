@@ -774,13 +774,36 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     saveJSON("ratings", next);
   };
 
-  /* two-pass (per-side) control: explicit override wins, else auto-detected */
-  const effUni = (e) => (e && uniOverride[e.id] != null ? uniOverride[e.id] : autoUnilateral(e));
-  const toggleUni = (e) => {
-    const next = { ...uniOverride, [e.id]: !effUni(e) };
-    if (next[e.id] === autoUnilateral(e)) delete next[e.id]; // back to default — drop the override
-    setUniOverride(next);
-    saveJSON("unilateral", next);
+  /* two-pass (per-side) control. Precedence: my personal override, then the
+     exercise's own `uni` property (set on customs, travels with community
+     shares/exports), then auto-detection from the wording. */
+  const effUni = (e) => {
+    if (!e) return false;
+    if (uniOverride[e.id] != null) return uniOverride[e.id];
+    if (e.uni != null) return e.uni;
+    return autoUnilateral(e);
+  };
+  const toggleUni = (exObj) => {
+    const next = !effUni(exObj);
+    if (customEx.some((c) => c.id === exObj.id)) {
+      // my exercise — persist the flag as an exercise property and re-share it
+      const nextCustom = customEx.map((c) => (c.id === exObj.id ? { ...c, uni: next } : c));
+      setCustomEx(nextCustom);
+      saveJSON("customex", nextCustom);
+      const changed = nextCustom.find((c) => c.id === exObj.id);
+      if (changed) publishExercise(changed, (user.email || "").toLowerCase());
+      if (uniOverride[exObj.id] != null) {
+        const o = { ...uniOverride }; delete o[exObj.id]; // property is the source of truth now
+        setUniOverride(o); saveJSON("unilateral", o);
+      }
+    } else {
+      // built-in or someone else's community exercise — personal preference
+      const o = { ...uniOverride, [exObj.id]: next };
+      const dflt = exObj.uni != null ? exObj.uni : autoUnilateral(exObj);
+      if (o[exObj.id] === dflt) delete o[exObj.id]; // matches default — drop the override
+      setUniOverride(o);
+      saveJSON("unilateral", o);
+    }
   };
 
   const clearHistory = () => {
@@ -1351,9 +1374,20 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                           {repTargetOf(e) < workout.reps && <span style={{ color: "#B47E10", fontWeight: 700 }}> ↓</span>}
                         </>
                       )}
-                      {mode !== "hiit" && effUni(e) && <span style={{ color: "#5B8DEF", fontWeight: 700 }}> ×2</span>}
                     </div>
                     <div style={{ display: "flex", gap: 4 }}>
+                      <button
+                        onClick={(ev) => { ev.stopPropagation(); toggleUni(e); }}
+                        title="Both sides — run the set twice, once per side/direction"
+                        style={{
+                          border: "none", borderRadius: 8, padding: "2px 8px", cursor: "pointer",
+                          fontSize: 12, fontWeight: 700, lineHeight: 1.5,
+                          background: effUni(e) ? "#DCE7FB" : "#EFF1F5",
+                          color: effUni(e) ? "#2456B3" : "#6C7686",
+                          outline: effUni(e) ? "1.5px solid #5B8DEF" : "none",
+                        }}>
+                        ×2
+                      </button>
                       <button
                         onClick={(ev) => { ev.stopPropagation(); rate(e.id, ratings[e.id] === 1 ? 0 : 1); }}
                         title="Favorite — show this more often"

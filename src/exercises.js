@@ -418,6 +418,7 @@ const ADD_PROMPT_BASE = `Generate a JSON array of exercises for my workout app. 
   "type": "reps" | "time",
   "secs": 40,                    // only if type is "time"
   "eq": "db",                    // equipment needed — allowed values ONLY: __EQKEYS__. OMIT the field entirely if bodyweight-only. Never invent other values.
+  "uni": true,                   // optional — set true if the exercise works one side/arm/leg/direction at a time (NOT alternating); the app then runs the set twice, once per side
   "cue": "One or two sentences of plain-language form instruction.",
   "frames": [FRAME_A, FRAME_B]   // start and end position stick figures
 }]
@@ -458,6 +459,7 @@ export function validateExercise(e) {
   if (!["reps", "time"].includes(e.type)) errs.push("type must be reps|time");
   if (e.type === "time" && !(e.secs > 0)) errs.push("time type needs secs");
   if (e.eq != null && !EQUIPMENT[e.eq]) errs.push(`unknown equipment "${e.eq}" — allowed: ${Object.keys(EQUIPMENT).join(", ")} (or omit for bodyweight)`);
+  if (e.uni != null && typeof e.uni !== "boolean") errs.push("uni must be true/false or omitted");
   if (!e.cue) errs.push("missing cue");
   const frames = e.frames || POSES[e.pose];
   if (!Array.isArray(frames) || frames.length !== 2) errs.push("needs frames[2] (or a valid pose key)");
