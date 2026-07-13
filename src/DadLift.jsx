@@ -627,6 +627,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [shareCopied, setShareCopied] = useState(false);
   const [settingsFocus, setSettingsFocus] = useState(null); // "equip" scrolls settings to that section
   const [homeTab, setHomeTab] = useState("full"); // full workout | burn on the go
+  const [goMins, setGoMins] = useState(10); // burn-on-the-go time budget
+  const [goEffort, setGoEffort] = useState("steady"); // easy | steady | hard
   const [extEquip, setExtEquip] = useState({}); // admin-added catalog entries (config/equipment)
   const [shuffleN, setShuffleN] = useState(0); // today's reshuffle count — new seed each press
   const [excluded, setExcluded] = useState([]); // exercises thumbed out of TODAY'S workout
@@ -676,25 +678,59 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     ),
     [today, availEx, emphasis, ratings, shuffleN, excluded]
   );
-  /* burn-on-the-go: one bodyweight exercise per group, same seeded picker */
-  const anywhereWorkout = useMemo(() => {
+  /* burn-on-the-go: bodyweight-only, sized to fit the chosen time budget.
+     Groups rotate for balance; each move's cost estimate includes passes
+     (×2 sides), get-set countdowns, pacing, and rest. */
+  const EFFORT_SCALE = { easy: 0.7, steady: 1, hard: 1.3 };
+  const goPlan = useMemo(() => {
     const rng = mulberry32(dateSeed(today) * 7 + 13 + shuffleN * 131071);
-    const picks = [];
-    for (const g of Object.keys(GROUPS)) {
-      const gp = allEx.filter((e) => e.grp === g && !e.eq && !excluded.includes(e.id));
-      picks.push(...weightedPick(gp, 1, rng, ratings));
+    const pool = allEx.filter((e) => !e.eq && !excluded.includes(e.id));
+    const scale = EFFORT_SCALE[goEffort] || 1;
+    const est = (e) => {
+      if (mode === "hiit") return hiit[0] + hiit[1];
+      const passes = (uniOverride[e.id] != null ? uniOverride[e.id] : e.uni != null ? e.uni : autoUnilateral(e)) ? 2 : 1;
+      const work = e.type === "time" ? Math.round(e.secs * scale) : Math.round(workout.reps * scale) * tempo;
+      return passes * (work + readySecs) + restSecs;
+    };
+    // shuffled group order, up to 3 candidates queued per group
+    const groups = Object.keys(GROUPS);
+    for (let i = groups.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [groups[i], groups[j]] = [groups[j], groups[i]];
     }
-    return picks;
-  }, [today, allEx, excluded, ratings, shuffleN]);
+    const queues = groups.map((g) => weightedPick(pool.filter((e) => e.grp === g), 3, rng, ratings));
+    const budget = goMins * 60;
+    const picks = [];
+    let used = 0, gi = 0, guard = 0;
+    while (guard++ < 60 && picks.length < 15) {
+      const q = queues[gi % queues.length];
+      gi++;
+      if (!q.length) {
+        if (queues.every((qq) => !qq.length)) break;
+        continue;
+      }
+      const e = q.shift();
+      const cost = est(e);
+      if (picks.length >= 3 && used + cost > budget) break; // 3-move floor, then respect the clock
+      picks.push(e);
+      used += cost;
+      if (used >= budget) break;
+    }
+    return { picks, estMins: Math.max(1, Math.round(used / 60)) };
+  }, [today, allEx, excluded, ratings, shuffleN, goMins, goEffort, mode, hiit, tempo, readySecs, restSecs, workout.reps, uniOverride, customEx]);
+  const anywhereWorkout = goPlan.picks;
 
   const exList = quickEx || workout.exercises;
   const ex = exList[idx];
+  /* effort scaling applies only while a burn session is live */
+  const sessionScale = quickEx ? (EFFORT_SCALE[goEffort] || 1) : 1;
+  const secsOf = (e) => Math.max(10, Math.round(((e && e.secs) || 0) * sessionScale));
   const repTargets = useMemo(() => {
     const t = {};
     for (const e of [...exList, ...anywhereWorkout]) if (e.type === "reps") t[e.id] = adaptTarget(e.id, workout.reps, history);
     return t;
   }, [exList, anywhereWorkout, workout.reps, history]);
-  const repTargetOf = (e) => repTargets[e.id] || workout.reps;
+  const repTargetOf = (e) => Math.max(4, Math.round((repTargets[e.id] || workout.reps) * sessionScale));
   const say = (t) => { if (voiceOn) speak(t); };
 
   useEffect(() => {
@@ -752,6 +788,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         setEmphasis(s.emphasis ?? "balanced");
         setMicOn(s.micOn ?? true);
         setReadySecs(s.readySecs ?? 5);
+        setGoMins(s.goMins ?? 10);
+        setGoEffort(s.goEffort ?? "steady");
         setEquip(s.equip ?? {});
         // normalize any legacy free-text equipment into catalog keys
         setCustomEquip([...new Set((s.customEquip ?? []).map(normalizeEquip).filter(Boolean))]);
@@ -761,8 +799,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   }, []);
   useEffect(() => {
     if (!loaded) return;
-    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn, readySecs, equip, customEquip }, { debounce: 600 });
-  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn, readySecs, equip, customEquip]);
+    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn, readySecs, goMins, goEffort, equip, customEquip }, { debounce: 600 });
+  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn, readySecs, goMins, goEffort, equip, customEquip]);
 
   /* screen wake lock while working out — counting used to die when the phone locked */
   useEffect(() => {
@@ -988,7 +1026,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     const last = sessionLogRef.current[sessionLogRef.current.length - 1];
     if (last && last.name === ex.name && last.round === round) return; // DONE pressed as the auto-counter fired
     const inReady = phase === "ready"; // skipped before the set even started
-    const total = mode === "hiit" ? hiit[0] : ex.type === "time" ? ex.secs : 0;
+    const total = mode === "hiit" ? hiit[0] : ex.type === "time" ? secsOf(ex) : 0;
     let value;
     if (ex.type === "reps") value = mode === "hiit" || inReady ? 0 : repRef.current; // HIIT reps are AMRAP — filled in on the summary
     else value = inReady ? 0 : Math.max(0, total - (timeLeftRef.current || 0));
@@ -1007,7 +1045,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       setTimeLeft(readySecs);
     } else {
       setPhase("work");
-      const t0 = mode === "hiit" ? hiit[0] : exObj.type === "time" ? exObj.secs : 0;
+      const t0 = mode === "hiit" ? hiit[0] : exObj.type === "time" ? secsOf(exObj) : 0;
       timeLeftRef.current = t0;
       setTimeLeft(t0);
     }
@@ -1082,7 +1120,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           name: e.name,
           grp: e.grp,
           unit: e.type === "time" ? "s" : "reps",
-          target: e.type === "time" ? (mode === "hiit" ? hiit[0] : e.secs) : (mode === "hiit" ? "max" : repTargetOf(e)),
+          target: e.type === "time" ? (mode === "hiit" ? hiit[0] : secsOf(e)) : (mode === "hiit" ? "max" : repTargetOf(e)),
           round: r,
           value: k < log.length ? log[k].value : 0,
           partial: k < log.length ? !!log[k].partial : false,
@@ -1101,7 +1139,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
   const quitWorkout = () => {
     if (phase === "work") {
-      const total = mode === "hiit" ? hiit[0] : ex.type === "time" ? ex.secs : 0;
+      const total = mode === "hiit" ? hiit[0] : ex.type === "time" ? secsOf(ex) : 0;
       const elapsed = total - (timeLeftRef.current || 0);
       const progress = ex.type === "reps" && mode !== "hiit" ? repRef.current > 0 : elapsed > 0;
       if (progress) logDone(true); // partial — excluded from target adaptation
@@ -1148,7 +1186,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     const timed = phase === "rest" || phase === "ready" || mode === "hiit" || (ex && ex.type === "time");
     if (!timed) return;
     if (phase === "work" && timeLeft === 0) {
-      const v0 = mode === "hiit" ? hiit[0] : ex.secs;
+      const v0 = mode === "hiit" ? hiit[0] : secsOf(ex);
       timeLeftRef.current = v0;
       setTimeLeft(v0);
       return;
@@ -1337,6 +1375,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   if (screen === "home") {
     const homeList = homeTab === "go" ? anywhereWorkout : exList;
     const cardHiit = homeTab !== "go" && mode === "hiit";
+    const previewScale = homeTab === "go" ? (EFFORT_SCALE[goEffort] || 1) : 1;
     return (
       <div style={S.app}>
         <style>{FONT_CSS}</style>
@@ -1449,11 +1488,11 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, flexShrink: 0 }}>
                     <div style={{ fontSize: 13, color: "#6C7686" }}>
-                      {cardHiit ? `${hiit[0]}s` : e.type === "time" ? `${e.secs}s` : (
+                      {cardHiit ? `${hiit[0]}s` : e.type === "time" ? `${Math.max(10, Math.round(e.secs * previewScale))}s` : (
                         <>
-                          ×{repTargetOf(e)}
-                          {repTargetOf(e) > workout.reps && <span style={{ color: "#2FA671", fontWeight: 700 }}> ↑</span>}
-                          {repTargetOf(e) < workout.reps && <span style={{ color: "#B47E10", fontWeight: 700 }}> ↓</span>}
+                          ×{Math.max(4, Math.round(repTargetOf(e) * previewScale))}
+                          {homeTab !== "go" && repTargetOf(e) > workout.reps && <span style={{ color: "#2FA671", fontWeight: 700 }}> ↑</span>}
+                          {homeTab !== "go" && repTargetOf(e) < workout.reps && <span style={{ color: "#B47E10", fontWeight: 700 }}> ↓</span>}
                         </>
                       )}
                     </div>
@@ -1498,9 +1537,30 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
         {homeTab === "go" ? (
         <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-          <button onClick={startAnywhere} style={S.startBtn}>🔥 START BURN — NO EQUIPMENT</button>
+          <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontSize: 10, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>TIME</span>
+            {[5, 10, 15, 20].map((m) => (
+              <button key={m} onClick={() => setGoMins(m)}
+                style={{ ...S.pill, padding: "6px 14px", fontSize: 13, fontWeight: 700, background: goMins === m ? "#5B8DEF" : "#E4E7EC", color: goMins === m ? "#FFFFFF" : "#3D4756" }}>
+                {m}m
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontSize: 10, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>EFFORT</span>
+            {[["easy", "😌 easy"], ["steady", "💪 steady"], ["hard", "🔥 hard"]].map(([k, label]) => (
+              <button key={k} onClick={() => setGoEffort(k)}
+                style={{ ...S.pill, padding: "6px 14px", fontSize: 13, background: goEffort === k ? "#1B2430" : "#E4E7EC", color: goEffort === k ? "#F5F6F8" : "#3D4756" }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <button onClick={startAnywhere} style={S.startBtn}>
+            🔥 START BURN — ~{goPlan.estMins} MIN · {anywhereWorkout.length} MOVES
+          </button>
           <div style={{ textAlign: "center", fontSize: 12, color: "#9AA3B0" }}>
-            One bodyweight move per muscle group, single round, ~10–15 minutes. Counts toward your streak — your equipment and settings stay untouched.
+            Bodyweight only, single round, sized to your time. Easy −30% / hard +30% reps and holds.
+            Counts toward your streak — equipment and settings stay untouched.
           </div>
         </div>
         ) : (
@@ -1600,7 +1660,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     ? (idx + 1 < exList.length ? (mode === "hiit" ? hiit[1] : restSecs) : roundRest)
     : isReady
       ? readySecs
-      : (mode === "hiit" ? hiit[0] : ex.secs || 0);
+      : (mode === "hiit" ? hiit[0] : ex.type === "time" ? secsOf(ex) : 0);
 
   return (
     <div style={{ ...S.app, display: "flex", flexDirection: "column" }}>
