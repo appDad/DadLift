@@ -21,6 +21,9 @@ function mulberry32(a) {
 }
 const dateSeed = (d) => d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
 
+/* unilateral exercises declare it in their cue — imports get this behavior free */
+const isUnilateral = (e) => /per side/i.test((e && e.cue) || "");
+
 /* ============ daily workout builder ============ */
 /* thumbs bias the deterministic picker: 👍 3x weight, 👎 0.4x, neutral 1x */
 function weightedPick(pool, count, rng, ratings) {
@@ -239,7 +242,7 @@ function Stepper({ label, value, unit, min, max, step, onChange }) {
   );
 }
 
-function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, micOn, setMicOn, customEquip, onAddEquip, onRemoveEquip, focusEquip, isAdmin, extEquip, onAddCatalog, onRemoveCatalog, onClearHistory, onBack, userEmail, onSignOut }) {
+function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, micOn, setMicOn, readySecs, setReadySecs, customEquip, onAddEquip, onRemoveEquip, focusEquip, isAdmin, extEquip, onAddCatalog, onRemoveCatalog, onClearHistory, onBack, userEmail, onSignOut }) {
   const S = styles;
   const [armClear, setArmClear] = useState(false); // two-tap confirm for the destructive bit
   const [catLabel, setCatLabel] = useState("");
@@ -261,6 +264,7 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
         <div style={S.settingsLabel}>CIRCUIT MODE</div>
         <Stepper label="Rep cadence" value={tempo} unit="s" min={1} max={6} step={0.5} onChange={setTempo} />
         <Stepper label="Rest between exercises" value={restSecs} unit="s" min={5} max={60} step={5} onChange={setRestSecs} />
+        <Stepper label="Get-set countdown before each set" value={readySecs} unit="s" min={0} max={20} step={5} onChange={setReadySecs} />
         <div style={S.settingsLabel}>HIIT MODE</div>
         <Stepper label="Work interval" value={hiit[0]} unit="s" min={10} max={90} step={5} onChange={(v) => setHiit([v, hiit[1]])} />
         <Stepper label="Rest interval" value={hiit[1]} unit="s" min={5} max={60} step={5} onChange={(v) => setHiit([hiit[0], v])} />
@@ -567,9 +571,12 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [voiceOn, setVoiceOn] = useState(true);
   const [round, setRound] = useState(1);
   const [idx, setIdx] = useState(0);
-  const [phase, setPhase] = useState("work");
+  const [phase, setPhase] = useState("work"); // work | rest | ready (get-set countdown, circuit only)
   const [timeLeft, setTimeLeft] = useState(0);
   const [rep, setRep] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [side, setSide] = useState(null); // "L" | "R" while counting a per-side exercise
+  const [readySecs, setReadySecs] = useState(5); // get-set countdown before each circuit set
   const [preview, setPreview] = useState(null);
   const [history, setHistory] = useState([]);
   const [coachLine, setCoachLine] = useState(null);
@@ -595,6 +602,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   // live counters mirrored into refs so advance() (called from timer closures) sees fresh values
   const repRef = useRef(0);
   const timeLeftRef = useRef(0);
+  const sideRef = useRef(null);
   const sessionLogRef = useRef([]);
 
   const allEx = useMemo(() => {
@@ -698,6 +706,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         setRestSecs(s.restSecs ?? 15); setRoundRest(s.roundRest ?? 45);
         setEmphasis(s.emphasis ?? "balanced");
         setMicOn(s.micOn ?? true);
+        setReadySecs(s.readySecs ?? 5);
         setEquip(s.equip ?? {});
         // normalize any legacy free-text equipment into catalog keys
         setCustomEquip([...new Set((s.customEquip ?? []).map(normalizeEquip).filter(Boolean))]);
@@ -707,8 +716,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   }, []);
   useEffect(() => {
     if (!loaded) return;
-    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn, equip, customEquip }, { debounce: 600 });
-  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn, equip, customEquip]);
+    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn, readySecs, equip, customEquip }, { debounce: 600 });
+  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn, readySecs, equip, customEquip]);
 
   /* screen wake lock while working out — counting used to die when the phone locked */
   useEffect(() => {
@@ -872,11 +881,43 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const logDone = (partial = false) => {
     const last = sessionLogRef.current[sessionLogRef.current.length - 1];
     if (last && last.name === ex.name && last.round === round) return; // DONE pressed as the auto-counter fired
+    const inReady = phase === "ready"; // skipped before the set even started
     const total = mode === "hiit" ? hiit[0] : ex.type === "time" ? ex.secs : 0;
     let value;
-    if (ex.type === "reps") value = mode === "hiit" ? 0 : repRef.current; // HIIT reps are AMRAP — filled in on the summary
-    else value = Math.max(0, total - (timeLeftRef.current || 0));
+    if (ex.type === "reps") value = mode === "hiit" || inReady ? 0 : repRef.current; // HIIT reps are AMRAP — filled in on the summary
+    else value = inReady ? 0 : Math.max(0, total - (timeLeftRef.current || 0));
     sessionLogRef.current.push({ id: ex.id, name: ex.name, grp: ex.grp, unit: ex.type === "time" ? "s" : "reps", value, round, partial });
+  };
+
+  /* enter a work slot: circuit gets a GET SET countdown first; HIIT flows straight in */
+  const setSideBoth = (v) => { sideRef.current = v; setSide(v); };
+  const beginSet = (exObj) => {
+    setRep(0); repRef.current = 0;
+    setSideBoth(mode !== "hiit" && exObj.type === "reps" && isUnilateral(exObj) ? "L" : null);
+    if (mode !== "hiit" && readySecs > 0) {
+      setPhase("ready");
+      timeLeftRef.current = readySecs;
+      setTimeLeft(readySecs);
+    } else {
+      setPhase("work");
+      const t0 = mode === "hiit" ? hiit[0] : exObj.type === "time" ? exObj.secs : 0;
+      timeLeftRef.current = t0;
+      setTimeLeft(t0);
+    }
+  };
+
+  /* per-side exercises: left side done -> get set -> right side */
+  const switchToRight = () => {
+    setSideBoth("R");
+    setRep(0); repRef.current = 0;
+    if (readySecs > 0) {
+      setPhase("ready");
+      timeLeftRef.current = readySecs;
+      setTimeLeft(readySecs);
+      say("Switch sides.");
+    } else {
+      say("Switch sides. Right side. Go.");
+    }
   };
 
   const advance = (partial = false) => {
@@ -914,9 +955,10 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
   const startNext = () => {
     stopListening(); setHeard(null);
-    if (idx + 1 < exList.length) setIdx(idx + 1);
-    else { setRound(round + 1); setIdx(0); }
-    setPhase("work"); setRep(0); repRef.current = 0;
+    let nextExObj;
+    if (idx + 1 < exList.length) { setIdx(idx + 1); nextExObj = exList[idx + 1]; }
+    else { setRound(round + 1); setIdx(0); nextExObj = exList[0]; }
+    beginSet(nextExObj);
   };
 
   /* build the editable summary: one row per planned slot, prefilled from the session log
@@ -992,8 +1034,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   };
 
   useEffect(() => {
-    if (screen !== "player") return;
-    const timed = phase === "rest" || mode === "hiit" || (ex && ex.type === "time");
+    if (screen !== "player" || paused) return;
+    const timed = phase === "rest" || phase === "ready" || mode === "hiit" || (ex && ex.type === "time");
     if (!timed) return;
     if (phase === "work" && timeLeft === 0) {
       const v0 = mode === "hiit" ? hiit[0] : ex.secs;
@@ -1006,6 +1048,13 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         if (v <= 1) {
           clearInterval(t);
           timeLeftRef.current = 0;
+          if (phase === "ready") {
+            // countdown done — go (the work-init branch above refills timed sets)
+            setPhase("work");
+            const s = sideRef.current;
+            say(s === "L" ? "Left side. Go." : s === "R" ? "Right side. Go." : "Go.");
+            return 0;
+          }
           if (phase === "work") advance(); else startNext();
           return 0;
         }
@@ -1016,10 +1065,10 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     }, 1000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, phase, idx, round, mode, timeLeft === 0]);
+  }, [screen, phase, idx, round, mode, paused, timeLeft === 0]);
 
   useEffect(() => {
-    if (screen !== "player" || phase !== "work" || mode === "hiit" || !ex || ex.type !== "reps") return;
+    if (screen !== "player" || paused || phase !== "work" || mode === "hiit" || !ex || ex.type !== "reps") return;
     const target = repTargetOf(ex);
     const t = setInterval(() => {
       setRep((r) => {
@@ -1029,7 +1078,9 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         beep(next === target ? 1100 : 740, 0.08);
         if (next === target) {
           clearInterval(t);
-          setTimeout(advance, tempo * 500);
+          // per-side sets run the count twice: left, then right
+          if (sideRef.current === "L") setTimeout(switchToRight, tempo * 500);
+          else setTimeout(advance, tempo * 500);
         }
         repRef.current = next;
         return next;
@@ -1037,19 +1088,17 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     }, tempo * 1000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, phase, idx, round, mode]);
+  }, [screen, phase, idx, round, mode, paused, side]);
 
   const start = () => {
-    setRound(1); setIdx(0); setPhase("work"); setRep(0);
+    setRound(1); setIdx(0);
     savedRef.current = false; setCoachLine(null); setLastEntry(null);
-    stopListening(); setHeard(null);
-    repRef.current = 0; sessionLogRef.current = [];
-    const t0 = mode === "hiit" ? hiit[0] : exList[0].type === "time" ? exList[0].secs : 0;
-    timeLeftRef.current = t0;
-    setTimeLeft(t0);
+    stopListening(); setHeard(null); setPaused(false);
+    sessionLogRef.current = [];
+    beginSet(exList[0]);
     setScreen("player");
     beep(660, 0.15);
-    say(`First up: ${exList[0].name}`);
+    say(`First up: ${exList[0].name}.${mode !== "hiit" && readySecs > 0 ? " Get set." : ""}`);
   };
 
   const S = styles;
@@ -1067,6 +1116,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     return <Settings tempo={tempo} setTempo={setTempo} restSecs={restSecs} setRestSecs={setRestSecs}
       roundRest={roundRest} setRoundRest={setRoundRest} hiit={hiit} setHiit={setHiit}
       voiceOn={voiceOn} setVoiceOn={setVoiceOn} micOn={micOn} setMicOn={setMicOn}
+      readySecs={readySecs} setReadySecs={setReadySecs}
       customEquip={customEquip}
       onAddEquip={(key) => { if (EQUIPMENT[key] && !customEquip.includes(key) && !DEFAULT_EQUIP.includes(key)) setCustomEquip([...customEquip, key]); }}
       onRemoveEquip={(key) => {
@@ -1357,28 +1407,31 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   /* ---------- PLAYER ---------- */
   const g = GROUPS[ex.grp];
   const isRest = phase === "rest";
+  const isReady = phase === "ready";
   const lastRec = sessionLogRef.current[sessionLogRef.current.length - 1];
   const nextEx = idx + 1 < exList.length ? exList[idx + 1] : round < rounds ? exList[0] : null;
   const shown = isRest && nextEx ? nextEx : ex;
   const shownG = GROUPS[shown.grp];
   const total = isRest
     ? (idx + 1 < exList.length ? (mode === "hiit" ? hiit[1] : restSecs) : roundRest)
-    : (mode === "hiit" ? hiit[0] : ex.secs || 0);
+    : isReady
+      ? readySecs
+      : (mode === "hiit" ? hiit[0] : ex.secs || 0);
 
   return (
     <div style={{ ...S.app, display: "flex", flexDirection: "column" }}>
       <style>{FONT_CSS}</style>
       <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button onClick={quitWorkout} style={S.ghostBtn}>✕ end</button>
-        <div style={{ fontSize: 13, color: "#6C7686", letterSpacing: 1 }}>
-          ROUND {round}/{rounds} · {idx + 1}/{exList.length}
+        <div style={{ fontSize: 13, color: paused ? "#B47E10" : "#6C7686", letterSpacing: 1, fontWeight: paused ? 700 : 400 }}>
+          {paused ? "PAUSED" : <>ROUND {round}/{rounds} · {idx + 1}/{exList.length}</>}
         </div>
         <button onClick={() => (isRest ? startNext() : advance(true))} style={S.ghostBtn}>skip ›</button>
       </div>
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "0 20px", textAlign: "center" }}>
         <div style={{ fontSize: 12, letterSpacing: 2, fontWeight: 700, color: shownG.color, textTransform: "uppercase" }}>
-          {isRest ? "REST — UP NEXT" : shownG.label}
+          {isRest ? "REST — UP NEXT" : isReady ? "GET SET" + (side === "L" ? " — LEFT SIDE" : side === "R" ? " — RIGHT SIDE" : "") : shownG.label}
         </div>
         <div style={{ fontFamily: DISPLAY, fontSize: 30, fontWeight: 700, letterSpacing: 0.5 }}>{shown.name}</div>
 
@@ -1388,17 +1441,19 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           </div>
         )}
 
-        {isRest || mode === "hiit" || ex.type === "time" ? (
-          <Ring total={total} left={timeLeft} color={isRest ? "#6C7686" : g.color}>
+        {isRest || isReady || mode === "hiit" || ex.type === "time" ? (
+          <Ring total={total} left={timeLeft} color={isRest ? "#6C7686" : isReady ? "#B47E10" : g.color}>
             <div style={{ fontFamily: DISPLAY, fontSize: 64, fontWeight: 700, lineHeight: 1 }}>{timeLeft}</div>
             <div style={{ fontSize: 12, color: "#6C7686", letterSpacing: 1 }}>
-              {isRest ? "REST" : mode === "hiit" && ex.type === "reps" ? "MAX REPS" : "SECONDS"}
+              {isRest ? "REST" : isReady ? "GET SET" : mode === "hiit" && ex.type === "reps" ? "MAX REPS" : "SECONDS"}
             </div>
           </Ring>
         ) : (
           <Ring total={repTargetOf(ex)} left={repTargetOf(ex) - rep} color={g.color}>
             <div style={{ fontFamily: DISPLAY, fontSize: 64, fontWeight: 700, lineHeight: 1, color: g.color }}>{rep}</div>
-            <div style={{ fontSize: 12, color: "#6C7686", letterSpacing: 1 }}>OF {repTargetOf(ex)} REPS</div>
+            <div style={{ fontSize: 12, color: "#6C7686", letterSpacing: 1 }}>
+              {side === "L" ? "LEFT · " : side === "R" ? "RIGHT · " : ""}OF {repTargetOf(ex)} REPS
+            </div>
           </Ring>
         )}
 
@@ -1418,9 +1473,15 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         )}
       </div>
 
-      <div style={{ padding: 20 }}>
-        {!isRest && mode !== "hiit" && ex.type === "reps" && (
-          <button onClick={advance} style={S.startBtn}>DONE — NEXT</button>
+      <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+        <button onClick={() => setPaused((p) => !p)}
+          style={{ ...S.startBtn, background: paused ? "#2FA671" : "#E4E7EC", color: paused ? "#FFFFFF" : "#1B2430" }}>
+          {paused ? "▶ RESUME" : "❚❚ PAUSE"}
+        </button>
+        {!isRest && !isReady && mode !== "hiit" && ex.type === "reps" && (
+          <button onClick={() => (side === "L" ? switchToRight() : advance())} style={S.startBtn}>
+            {side === "L" ? "LEFT DONE — SWITCH SIDES" : "DONE — NEXT"}
+          </button>
         )}
         {isRest && (
           <button onClick={startNext} style={{ ...S.startBtn, background: "#E4E7EC", color: "#1B2430" }}>SKIP REST</button>
