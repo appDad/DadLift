@@ -64,22 +64,25 @@ function weightedPick(pool, count, rng, ratings) {
   return out;
 }
 
-function buildWorkout(date, allEx, emphasis, ratings = {}, nonce = 0) {
+function buildWorkout(date, allEx, emphasis, ratings = {}, nonce = 0, slots = 8) {
   const rng = mulberry32(dateSeed(date) + nonce * 131071); // reshuffles re-roll deterministically
   const groups = Object.keys(GROUPS);
-  // 8 slots total: every group gets at least 1; a focus day gives that group 4,
-  // otherwise the leftover slots rotate deterministically with the date
-  let counts;
+  // `slots` total (time-budget driven): groups fill round-robin in a
+  // date-shuffled order; a focus day gives that group half the slots
+  const order = groups.slice();
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  const counts = Object.fromEntries(groups.map((g) => [g, 0]));
+  let rem = Math.max(1, slots);
   if (emphasis && GROUPS[emphasis]) {
-    counts = Object.fromEntries(groups.map((g) => [g, g === emphasis ? 4 : 1]));
+    counts[emphasis] = Math.max(1, Math.round(slots / 2));
+    rem -= counts[emphasis];
+    const others = order.filter((g) => g !== emphasis);
+    for (let i = 0; rem > 0; i++, rem--) counts[others[i % others.length]]++;
   } else {
-    counts = Object.fromEntries(groups.map((g) => [g, 1]));
-    const order = groups.slice();
-    for (let i = order.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      [order[i], order[j]] = [order[j], order[i]];
-    }
-    for (let i = 0; i < 8 - groups.length; i++) counts[order[i % order.length]]++;
+    for (let i = 0; rem > 0; i++, rem--) counts[order[i % order.length]]++;
   }
   const picks = [];
   for (const g of groups) {
@@ -629,6 +632,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [homeTab, setHomeTab] = useState("full"); // full workout | burn on the go
   const [goMins, setGoMins] = useState(10); // burn-on-the-go time budget
   const [goEffort, setGoEffort] = useState("steady"); // easy | steady | hard
+  const [fullMins, setFullMins] = useState(20); // full-workout time budget
+  const [fullEffort, setFullEffort] = useState("steady"); // easy | steady | hard
   const [extEquip, setExtEquip] = useState({}); // admin-added catalog entries (config/equipment)
   const [shuffleN, setShuffleN] = useState(0); // today's reshuffle count — new seed each press
   const [excluded, setExcluded] = useState([]); // exercises thumbed out of TODAY'S workout
@@ -668,30 +673,46 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const haveEquip = (key) => equip[key] !== false; // unknown gear defaults to available
   /* only build workouts from exercises whose equipment is on hand */
   const availEx = useMemo(() => allEx.filter((e) => !e.eq || haveEquip(e.eq)), [allEx, equip]);
+
+  /* per-move time cost: work at current pacing (or interval), ×2 passes,
+     get-set countdown, and rest — shared by both session planners */
+  const EFFORT_SCALE = { easy: 0.7, steady: 1, hard: 1.3 };
+  const estCost = (e, scale) => {
+    if (mode === "hiit") return hiit[0] + hiit[1];
+    const passes = (uniOverride[e.id] != null ? uniOverride[e.id] : e.uni != null ? e.uni : autoUnilateral(e)) ? 2 : 1;
+    const work = e.type === "time" ? Math.round((e.secs || 40) * scale) : Math.round(12 * scale) * tempo;
+    return passes * (work + readySecs) + restSecs;
+  };
+
+  /* how many slots per round fit the full-workout time budget */
+  const fullScale = EFFORT_SCALE[fullEffort] || 1;
+  const fullSlots = useMemo(() => {
+    const pool = availEx.filter((e) => !excluded.includes(e.id));
+    if (!pool.length) return 8;
+    const avg = pool.reduce((s, e) => s + estCost(e, fullScale), 0) / pool.length;
+    const budget = fullMins * 60 - (rounds - 1) * roundRest;
+    return Math.max(3, Math.min(14, Math.round(budget / (avg * rounds))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availEx, excluded, fullMins, fullEffort, rounds, roundRest, mode, hiit, tempo, readySecs, restSecs, uniOverride]);
+
   const workout = useMemo(
     () => buildWorkout(
       today,
       availEx.filter((e) => !excluded.includes(e.id)),
       emphasis === "balanced" ? null : emphasis,
       ratings,
-      shuffleN
+      shuffleN,
+      fullSlots
     ),
-    [today, availEx, emphasis, ratings, shuffleN, excluded]
+    [today, availEx, emphasis, ratings, shuffleN, excluded, fullSlots]
   );
   /* burn-on-the-go: bodyweight-only, sized to fit the chosen time budget.
-     Groups rotate for balance; each move's cost estimate includes passes
-     (×2 sides), get-set countdowns, pacing, and rest. */
-  const EFFORT_SCALE = { easy: 0.7, steady: 1, hard: 1.3 };
+     Groups rotate for balance. */
   const goPlan = useMemo(() => {
     const rng = mulberry32(dateSeed(today) * 7 + 13 + shuffleN * 131071);
     const pool = allEx.filter((e) => !e.eq && !excluded.includes(e.id));
     const scale = EFFORT_SCALE[goEffort] || 1;
-    const est = (e) => {
-      if (mode === "hiit") return hiit[0] + hiit[1];
-      const passes = (uniOverride[e.id] != null ? uniOverride[e.id] : e.uni != null ? e.uni : autoUnilateral(e)) ? 2 : 1;
-      const work = e.type === "time" ? Math.round(e.secs * scale) : Math.round(workout.reps * scale) * tempo;
-      return passes * (work + readySecs) + restSecs;
-    };
+    const est = (e) => estCost(e, scale);
     // shuffled group order, up to 3 candidates queued per group
     const groups = Object.keys(GROUPS);
     for (let i = groups.length - 1; i > 0; i--) {
@@ -722,8 +743,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
   const exList = quickEx || workout.exercises;
   const ex = exList[idx];
-  /* effort scaling applies only while a burn session is live */
-  const sessionScale = quickEx ? (EFFORT_SCALE[goEffort] || 1) : 1;
+  /* effort scaling: the live session's effort setting (burn or full) */
+  const sessionScale = quickEx ? (EFFORT_SCALE[goEffort] || 1) : fullScale;
   const secsOf = (e) => Math.max(10, Math.round(((e && e.secs) || 0) * sessionScale));
   const repTargets = useMemo(() => {
     const t = {};
@@ -790,6 +811,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         setReadySecs(s.readySecs ?? 5);
         setGoMins(s.goMins ?? 10);
         setGoEffort(s.goEffort ?? "steady");
+        setFullMins(s.fullMins ?? 20);
+        setFullEffort(s.fullEffort ?? "steady");
         setEquip(s.equip ?? {});
         // normalize any legacy free-text equipment into catalog keys
         setCustomEquip([...new Set((s.customEquip ?? []).map(normalizeEquip).filter(Boolean))]);
@@ -799,8 +822,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   }, []);
   useEffect(() => {
     if (!loaded) return;
-    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn, readySecs, goMins, goEffort, equip, customEquip }, { debounce: 600 });
-  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn, readySecs, goMins, goEffort, equip, customEquip]);
+    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn, readySecs, goMins, goEffort, fullMins, fullEffort, equip, customEquip }, { debounce: 600 });
+  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn, readySecs, goMins, goEffort, fullMins, fullEffort, equip, customEquip]);
 
   /* screen wake lock while working out — counting used to die when the phone locked */
   useEffect(() => {
@@ -1375,7 +1398,10 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   if (screen === "home") {
     const homeList = homeTab === "go" ? anywhereWorkout : exList;
     const cardHiit = homeTab !== "go" && mode === "hiit";
-    const previewScale = homeTab === "go" ? (EFFORT_SCALE[goEffort] || 1) : 1;
+    const cardScale = EFFORT_SCALE[homeTab === "go" ? goEffort : fullEffort] || 1;
+    const fullEst = Math.round(
+      (workout.exercises.reduce((s, e) => s + estCost(e, fullScale), 0) * rounds + (rounds - 1) * roundRest) / 60
+    );
     return (
       <div style={S.app}>
         <style>{FONT_CSS}</style>
@@ -1488,11 +1514,11 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, flexShrink: 0 }}>
                     <div style={{ fontSize: 13, color: "#6C7686" }}>
-                      {cardHiit ? `${hiit[0]}s` : e.type === "time" ? `${Math.max(10, Math.round(e.secs * previewScale))}s` : (
+                      {cardHiit ? `${hiit[0]}s` : e.type === "time" ? `${Math.max(10, Math.round(e.secs * cardScale))}s` : (
                         <>
-                          ×{Math.max(4, Math.round(repTargetOf(e) * previewScale))}
-                          {homeTab !== "go" && repTargetOf(e) > workout.reps && <span style={{ color: "#2FA671", fontWeight: 700 }}> ↑</span>}
-                          {homeTab !== "go" && repTargetOf(e) < workout.reps && <span style={{ color: "#B47E10", fontWeight: 700 }}> ↓</span>}
+                          ×{Math.max(4, Math.round((repTargets[e.id] || workout.reps) * cardScale))}
+                          {homeTab !== "go" && (repTargets[e.id] || workout.reps) > workout.reps && <span style={{ color: "#2FA671", fontWeight: 700 }}> ↑</span>}
+                          {homeTab !== "go" && (repTargets[e.id] || workout.reps) < workout.reps && <span style={{ color: "#B47E10", fontWeight: 700 }}> ↓</span>}
                         </>
                       )}
                     </div>
@@ -1596,7 +1622,27 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               </button>
             ))}
           </div>
-          <button onClick={start} style={S.startBtn}>START WORKOUT</button>
+          <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontSize: 10, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>TIME</span>
+            {[10, 20, 30, 45].map((m) => (
+              <button key={m} onClick={() => setFullMins(m)}
+                style={{ ...S.pill, padding: "6px 14px", fontSize: 13, fontWeight: 700, background: fullMins === m ? "#5B8DEF" : "#E4E7EC", color: fullMins === m ? "#FFFFFF" : "#3D4756" }}>
+                {m}m
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontSize: 10, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>EFFORT</span>
+            {[["easy", "😌 easy"], ["steady", "💪 steady"], ["hard", "🔥 hard"]].map(([k, label]) => (
+              <button key={k} onClick={() => setFullEffort(k)}
+                style={{ ...S.pill, padding: "6px 14px", fontSize: 13, background: fullEffort === k ? "#1B2430" : "#E4E7EC", color: fullEffort === k ? "#F5F6F8" : "#3D4756" }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <button onClick={start} style={S.startBtn}>
+            START WORKOUT — ~{fullEst} MIN · {workout.exercises.length} × {rounds}
+          </button>
           <div style={{ textAlign: "center", fontSize: 12, color: "#9AA3B0" }}>
             Same day = same workout — tap ⟳ RESHUFFLE for a new draw. 👍 favorites an exercise (shows more), 👎 swaps it out (shows less). Tap a card for form.
           </div>
