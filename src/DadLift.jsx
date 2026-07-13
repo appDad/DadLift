@@ -1651,7 +1651,14 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           </button>
         )}
         {isRest && (
-          <button onClick={startNext} style={{ ...S.startBtn, background: "#E4E7EC", color: "#1B2430" }}>SKIP REST</button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => setTimeLeft((v) => { timeLeftRef.current = v + 15; return v + 15; })}
+              style={{ ...S.startBtn, flex: 1, background: "#E4E7EC", color: "#1B2430" }}>
+              +15s REST
+            </button>
+            <button onClick={startNext} style={{ ...S.startBtn, flex: 1, background: "#E4E7EC", color: "#1B2430" }}>SKIP REST</button>
+          </div>
         )}
       </div>
     </div>
