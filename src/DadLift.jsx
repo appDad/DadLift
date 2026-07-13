@@ -21,8 +21,14 @@ function mulberry32(a) {
 }
 const dateSeed = (d) => d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
 
-/* unilateral exercises declare it in their cue — imports get this behavior free */
-const isUnilateral = (e) => /per side/i.test((e && e.cue) || "");
+/* unilateral exercises: declared via "per side" in the cue, or detected from
+   one-arm/one-leg wording in name+cue. Alternating exercises are excluded —
+   they switch sides within a single count. */
+const isUnilateral = (e) => {
+  const t = `${(e && e.name) || ""} ${(e && e.cue) || ""}`;
+  if (/alternat/i.test(t)) return false;
+  return /per side|single[- ](arm|leg)|one (arm|leg|hand|side)|each (side|arm|leg)/i.test(t);
+};
 
 /* ============ daily workout builder ============ */
 /* thumbs bias the deterministic picker: 👍 3x weight, 👎 0.4x, neutral 1x */
@@ -1043,6 +1049,12 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       setTimeLeft(v0);
       return;
     }
+    // timed sides: cue-declared halfway switches, plus HIIT AMRAP unilateral sets
+    const workTotal = mode === "hiit" ? hiit[0] : (ex && ex.secs) || 0;
+    const halfSwitch = phase === "work" && ex && (
+      (ex.type === "time" && /halfway|do both sides/i.test(ex.cue || "")) ||
+      (mode === "hiit" && ex.type === "reps" && isUnilateral(ex))
+    );
     const t = setInterval(() => {
       setTimeLeft((v) => {
         if (v <= 1) {
@@ -1059,6 +1071,10 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           return 0;
         }
         if (v <= 4) beep(880, 0.1);
+        if (halfSwitch && v - 1 === Math.floor(workTotal / 2) && v - 1 > 2) {
+          say("Switch sides.");
+          beep(990, 0.15);
+        }
         timeLeftRef.current = v - 1;
         return v - 1;
       });

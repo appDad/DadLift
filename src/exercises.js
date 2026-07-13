@@ -276,7 +276,7 @@ export const BUILTIN = [
   { id: "rcu", grp: "arms", name: "Reverse Curl", type: "reps", pose: "curl", cue: "Palms facing down the whole rep. Lighter than normal curls. Builds forearms and grip." },
   { id: "oht", grp: "arms", name: "Overhead Tricep Ext.", type: "reps", pose: "ohTricep", cue: "One dumbbell in both hands overhead. Bend elbows to lower behind your head, extend up. Elbows point forward." },
   { id: "skc", grp: "arms", name: "Skull Crusher", type: "reps", pose: "skullCrusher", cue: "Lying down, dumbbells pressed above your chest. Bend only at the elbows to lower toward your forehead, extend back up." },
-  { id: "kb", grp: "arms", name: "Tricep Kickback", type: "reps", pose: "kickback", cue: "Hinge forward, upper arm locked parallel to floor. Extend the forearm straight back, squeeze, return." },
+  { id: "kb", grp: "arms", name: "Tricep Kickback", type: "reps", pose: "kickback", cue: "Hinge forward, one upper arm locked parallel to the floor. Extend the forearm straight back, squeeze, return. Count is per side." },
   { id: "cgp", grp: "arms", name: "Med Ball Push-Up", type: "reps", pose: "cgPushup", cue: "Both hands on the ball, tight plank. Lower chest to the ball, press up. Elbows close — all triceps." },
   { id: "rt", grp: "core", name: "Russian Twist", type: "time", secs: 40, pose: "russianTwist", cue: "Seated, lean back, feet up if you can. Rotate the ball side to side, touching near the floor each side." },
   { id: "slm", grp: "core", name: "Med Ball Slam", type: "reps", pose: "slam", cue: "Ball overhead on your toes, then slam it down hard using your whole core. Catch and repeat." },
@@ -432,6 +432,8 @@ Each FRAME draws a stick figure in a 100x100 viewBox (y increases downward, grou
 }
 
 Conventions from existing figures: standing figures have head near [50,14], torso [50,20]->[50,52], legs splayed to y=90. Lying figures use the ground near y=78-84. Frame A is the start position, frame B is the peak/end position; the app cross-fades between them to animate the movement. Keep figures side-view where possible, anatomically plausible, and make the difference between frames clearly show the movement.
+
+Unilateral convention: if the exercise works one arm/leg/side at a time (not alternating), END the cue with exactly "Count is per side." — the app will then count a full set for the left side, announce a switch, and count the right side. Alternating exercises (switching every rep) should instead say "Alternate sides."
 
 Generate N exercises for muscle group(s): X.`;
 
