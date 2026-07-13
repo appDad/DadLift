@@ -613,6 +613,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [doneExList, setDoneExList] = useState([]); // snapshot for the DONE screen — rating changes re-roll the picker
   const [micOn, setMicOn] = useState(true);
   const [heard, setHeard] = useState(null); // last spoken rep count picked up by the mic
+  const [manualReps, setManualReps] = useState(""); // typed fallback when the mic mishears
   const [ratings, setRatings] = useState({}); // exercise id -> 1 | 0 | -1
   const [uniOverride, setUniOverride] = useState({}); // exercise id -> true/false two-pass override
   const [community, setCommunity] = useState([]); // [{ex, by}] shared by other users
@@ -938,6 +939,27 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     }, 7000);
   };
 
+  /* typed rep entry during rest — the fallback when speech doesn't register */
+  const applyManualReps = (n) => {
+    stopListening(); // no point letting the mic overwrite a typed number
+    const slotIndex = sessionLogRef.current.length - 1;
+    const slot = sessionLogRef.current[slotIndex];
+    if (slot) slot.value = n;
+    setSummaryRows((prev) => (prev.length > slotIndex ? prev.map((r, i) => (i === slotIndex ? { ...r, value: n } : r)) : prev));
+    setHeard(n); // reuse the "logged ✓" confirmation
+    setManualReps("");
+  };
+
+  /* flip the CURRENT exercise's both-sides mode mid-workout */
+  const togglePlayerUni = () => {
+    const next = !effUni(ex);
+    toggleUni(ex);
+    if (mode !== "hiit" && (phase === "work" || phase === "ready")) {
+      if (next && !sideRef.current) setSideBoth("L"); // this pass becomes side 1
+      if (!next && sideRef.current) setSideBoth(null); // finish as a single pass
+    }
+  };
+
   /* record what actually happened for one work slot — feeds the editable summary */
   const logDone = (partial = false) => {
     const last = sessionLogRef.current[sessionLogRef.current.length - 1];
@@ -991,6 +1013,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
     const goRest = (announceText, secs) => {
       setPhase("rest"); setTimeLeft(secs);
+      setManualReps("");
       if (askReps) {
         setHeard(null);
         say("How many reps?");
@@ -1530,10 +1553,33 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         </div>
         <div style={{ fontFamily: DISPLAY, fontSize: 30, fontWeight: 700, letterSpacing: 0.5 }}>{shown.name}</div>
 
-        {isRest && micOn && lastRec && lastRec.unit === "reps" && (
-          <div style={{ fontSize: 13, fontWeight: 600, color: heard != null ? "#2FA671" : "#B47E10" }}>
-            {heard != null ? `Heard ${heard} reps — logged ✓` : "🎤 Say how many reps you got"}
-          </div>
+        {isRest && lastRec && lastRec.unit === "reps" && (
+          <>
+            {micOn && (
+              <div style={{ fontSize: 13, fontWeight: 600, color: heard != null ? "#2FA671" : "#B47E10" }}>
+                {heard != null ? `Got ${heard} reps — logged ✓` : "🎤 Say how many reps you got"}
+              </div>
+            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="number" min={0} max={999}
+                value={manualReps}
+                placeholder={String(lastRec.value || 0)}
+                onChange={(ev) => setManualReps(ev.target.value)}
+                onKeyDown={(ev) => { if (ev.key === "Enter" && manualReps !== "") applyManualReps(Math.max(0, Math.min(999, Math.round(+manualReps) || 0))); }}
+                style={{
+                  width: 74, textAlign: "center", background: "#FFFFFF", color: "#1B2430",
+                  border: "1px solid #DDE2E9", borderRadius: 10, padding: "8px 4px",
+                  fontFamily: DISPLAY, fontSize: 18, fontWeight: 700,
+                }}
+              />
+              <button
+                onClick={() => { if (manualReps !== "") applyManualReps(Math.max(0, Math.min(999, Math.round(+manualReps) || 0))); }}
+                style={{ ...S.pill, background: "#1B2430", color: "#F5F6F8", fontSize: 12 }}>
+                SET REPS
+              </button>
+            </div>
+          </>
         )}
 
         {isRest || isReady || mode === "hiit" || ex.type === "time" ? (
@@ -1574,6 +1620,16 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           style={{ ...S.startBtn, background: paused ? "#2FA671" : "#E4E7EC", color: paused ? "#FFFFFF" : "#1B2430" }}>
           {paused ? "▶ RESUME" : "❚❚ PAUSE"}
         </button>
+        {!isRest && mode !== "hiit" && (
+          <button onClick={togglePlayerUni}
+            style={{
+              ...S.startBtn, fontSize: 16, padding: "12px 0",
+              background: effUni(ex) ? "#DCE7FB" : "#EFF1F5",
+              color: effUni(ex) ? "#2456B3" : "#6C7686",
+            }}>
+            {effUni(ex) ? "×2 BOTH SIDES ✓" : "×2 BOTH SIDES — OFF"}
+          </button>
+        )}
         {!isRest && !isReady && mode !== "hiit" && ex.type === "reps" && (
           <button onClick={() => (side === "L" ? switchToRight() : advance())} style={S.startBtn}>
             {side === "L" ? "LEFT DONE — SWITCH SIDES" : "DONE — NEXT"}
