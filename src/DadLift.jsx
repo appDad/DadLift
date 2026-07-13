@@ -614,6 +614,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [micOn, setMicOn] = useState(true);
   const [heard, setHeard] = useState(null); // last spoken rep count picked up by the mic
   const [manualReps, setManualReps] = useState(""); // typed fallback when the mic mishears
+  const [relisten, setRelisten] = useState(false); // re-record tapped — show the listening hint
   const [ratings, setRatings] = useState({}); // exercise id -> 1 | 0 | -1
   const [uniOverride, setUniOverride] = useState({}); // exercise id -> true/false two-pass override
   const [community, setCommunity] = useState([]); // [{ex, by}] shared by other users
@@ -950,6 +951,14 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     setManualReps("");
   };
 
+  /* reopen the mic for another attempt at the rep count */
+  const rerecord = () => {
+    const slotIndex = sessionLogRef.current.length - 1;
+    setHeard(null);
+    setRelisten(true);
+    listenForReps(slotIndex);
+  };
+
   /* flip the CURRENT exercise's both-sides mode mid-workout */
   const togglePlayerUni = () => {
     const next = !effUni(ex);
@@ -1013,7 +1022,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
     const goRest = (announceText, secs) => {
       setPhase("rest"); setTimeLeft(secs);
-      setManualReps("");
+      setManualReps(""); setRelisten(false);
       if (askReps) {
         setHeard(null);
         say("How many reps?");
@@ -1555,7 +1564,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
         {isRest && lastRec && lastRec.unit === "reps" && (
           <>
-            {micOn && (
+            {(micOn || relisten) && (
               <div style={{ fontSize: 13, fontWeight: 600, color: heard != null ? "#2FA671" : "#B47E10" }}>
                 {heard != null ? `Got ${heard} reps — logged ✓` : "🎤 Say how many reps you got"}
               </div>
@@ -1577,6 +1586,12 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                 onClick={() => { if (manualReps !== "") applyManualReps(Math.max(0, Math.min(999, Math.round(+manualReps) || 0))); }}
                 style={{ ...S.pill, background: "#1B2430", color: "#F5F6F8", fontSize: 12 }}>
                 SET REPS
+              </button>
+              <button
+                onClick={rerecord}
+                title="Open the mic again and say the number"
+                style={{ ...S.pill, background: "#E4E7EC", color: "#3D4756", fontSize: 12 }}>
+                🎤 SAY IT
               </button>
             </div>
           </>
