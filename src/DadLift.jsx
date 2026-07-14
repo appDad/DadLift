@@ -642,6 +642,25 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [shareCopied, setShareCopied] = useState(false);
   const [settingsFocus, setSettingsFocus] = useState(null); // "equip" scrolls settings to that section
   const [homeTab, setHomeTab] = useState("full"); // full workout | burn on the go
+  const [focusArrows, setFocusArrows] = useState({ l: false, r: true }); // focus-row scroll affordance
+  const focusRowRef = useRef(null);
+  const scrollFocus = (dir) => {
+    const el = focusRowRef.current;
+    if (el) el.scrollBy({ left: dir * el.clientWidth * 0.7, behavior: "smooth" });
+  };
+  // poll the row's scroll position (native scroll events proved flaky in this WebView)
+  useEffect(() => {
+    if (screen !== "home" || homeTab !== "full") return;
+    const tick = () => {
+      const el = focusRowRef.current;
+      if (!el) return;
+      const l = el.scrollLeft > 6, r = el.scrollLeft + el.clientWidth < el.scrollWidth - 6;
+      setFocusArrows((p) => (p.l === l && p.r === r ? p : { l, r }));
+    };
+    tick();
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [screen, homeTab]);
   const [goMins, setGoMins] = useState(10); // burn-on-the-go time budget
   const [goEffort, setGoEffort] = useState("steady"); // easy | steady | hard
   const [fullMins, setFullMins] = useState(20); // full-workout time budget
@@ -1503,23 +1522,46 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         )}
 
         {homeTab === "full" && (
-          <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "0 16px 14px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
-            {["balanced", ...Object.keys(GROUPS)].map((gk) => {
-              const on = emphasis === gk;
-              const c = GROUPS[gk] ? GROUPS[gk].color : "#7B5BE6";
-              return (
-                <button key={gk} onClick={() => setEmphasis(gk)}
-                  style={{
-                    flexShrink: 0, border: "none", borderRadius: 999, cursor: "pointer",
-                    padding: "9px 18px", fontFamily: DISPLAY, fontSize: 16, fontWeight: 700, letterSpacing: 0.5,
-                    background: on ? c : "#FFFFFF",
-                    color: on ? "#FFFFFF" : "#6C7686",
-                    boxShadow: on ? `0 3px 10px ${c}66` : "0 1px 3px rgba(27,36,48,0.08)",
-                  }}>
-                  {gk === "balanced" ? "ALL-ROUND" : GROUPS[gk].label.toUpperCase()}
-                </button>
-              );
-            })}
+          <div style={{ position: "relative", marginBottom: 14 }}>
+            <div ref={focusRowRef}
+              style={{ display: "flex", gap: 8, overflowX: "auto", padding: "0 16px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+              {["balanced", ...Object.keys(GROUPS)].map((gk) => {
+                const on = emphasis === gk;
+                const c = GROUPS[gk] ? GROUPS[gk].color : "#7B5BE6";
+                return (
+                  <button key={gk} onClick={() => setEmphasis(gk)}
+                    style={{
+                      flexShrink: 0, border: "none", borderRadius: 999, cursor: "pointer",
+                      padding: "9px 18px", fontFamily: DISPLAY, fontSize: 16, fontWeight: 700, letterSpacing: 0.5,
+                      background: on ? c : "#FFFFFF",
+                      color: on ? "#FFFFFF" : "#6C7686",
+                      boxShadow: on ? `0 3px 10px ${c}66` : "0 1px 3px rgba(27,36,48,0.08)",
+                    }}>
+                    {gk === "balanced" ? "ALL-ROUND" : GROUPS[gk].label.toUpperCase()}
+                  </button>
+                );
+              })}
+            </div>
+            {[["l", 0, "‹", "to right"], ["r", 1, "›", "to left"]].map(([side, dir, chev]) => (
+              focusArrows[side] && (
+                <div key={side} style={{
+                  position: "absolute", top: 0, bottom: 0, [side === "l" ? "left" : "right"]: 0,
+                  display: "flex", alignItems: "center", paddingLeft: side === "l" ? 8 : 20, paddingRight: side === "l" ? 20 : 8,
+                  pointerEvents: "none",
+                  background: `linear-gradient(${side === "l" ? "90deg" : "270deg"}, rgba(246,244,236,0.98), rgba(246,244,236,0))`,
+                }}>
+                  <button onClick={() => scrollFocus(dir === 0 ? -1 : 1)}
+                    style={{
+                      pointerEvents: "auto", border: "none", cursor: "pointer",
+                      width: 34, height: 34, borderRadius: 999, background: "#FFFFFF",
+                      boxShadow: "0 2px 8px rgba(27,36,48,0.18)", color: "#1B2430",
+                      fontSize: 20, fontWeight: 700, lineHeight: 1,
+                    }}>
+                    {chev}
+                  </button>
+                </div>
+              )
+            ))}
           </div>
         )}
 
