@@ -10,7 +10,7 @@ const SHARE_MATCH = window.location.pathname.match(/^\/s\/([A-Za-z0-9_-]{10,})/)
 
 const S = {
   splash: {
-    minHeight: "100vh", background: "#F5F6F8", color: "#1B2430",
+    minHeight: "100vh", background: "linear-gradient(180deg, #F2F6FF 0%, #FDF4EC 100%)", color: "#1B2430",
     fontFamily: "system-ui,-apple-system,sans-serif",
     display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
     gap: 18, padding: 24, textAlign: "center",
@@ -18,6 +18,9 @@ const S = {
   title: {
     fontFamily: `'Barlow Condensed','Arial Narrow',system-ui,sans-serif`,
     fontSize: 56, fontWeight: 700, letterSpacing: 4, lineHeight: 1,
+    background: "linear-gradient(100deg, #4F7DF0 0%, #9B7EDE 55%, #E8433F 100%)",
+    WebkitBackgroundClip: "text", backgroundClip: "text",
+    WebkitTextFillColor: "transparent", color: "#4F7DF0",
   },
   googleBtn: {
     display: "flex", alignItems: "center", gap: 12,

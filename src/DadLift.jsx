@@ -125,15 +125,15 @@ function adaptTarget(exId, base, history) {
 }
 
 /* ============ home setup-card controls ============ */
-function Seg({ options, value, onChange }) {
+function Seg({ options, value, onChange, colors }) {
   return (
     <div style={{ display: "flex", background: "#EFF1F5", borderRadius: 10, padding: 3, gap: 3, flex: 1, maxWidth: 250 }}>
       {options.map(([k, l]) => (
         <button key={k} onClick={() => onChange(k)}
           style={{
             flex: 1, border: "none", borderRadius: 8, padding: "8px 0", fontSize: 13, fontWeight: 600, cursor: "pointer",
-            background: value === k ? "#1B2430" : "transparent",
-            color: value === k ? "#F5F6F8" : "#3D4756",
+            background: value === k ? ((colors && colors[k]) || "#1B2430") : "transparent",
+            color: value === k ? "#FFFFFF" : "#3D4756",
           }}>
           {l}
         </button>
@@ -142,7 +142,7 @@ function Seg({ options, value, onChange }) {
   );
 }
 function MiniStep({ value, unit = "", min, max, step, onChange }) {
-  const b = { border: "none", borderRadius: 10, width: 38, height: 38, fontSize: 20, fontWeight: 700, background: "#EFF1F5", color: "#1B2430", cursor: "pointer", lineHeight: 1 };
+  const b = { border: "none", borderRadius: 10, width: 38, height: 38, fontSize: 20, fontWeight: 700, background: "#E7EEFF", color: "#2456B3", cursor: "pointer", lineHeight: 1 };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
       <button style={b} onClick={() => onChange(Math.max(min, value - step))}>−</button>
@@ -547,7 +547,7 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, comm
                           onClick={(ev) => { ev.stopPropagation(); onToggleType(e); }}
                           title="Tap to switch between timed and counted"
                           style={{ border: "none", borderRadius: 6, padding: "2px 8px", fontSize: 11, cursor: "pointer", background: "#EFF1F5", color: "#3D4756" }}>
-                          {e.type === "time" ? `⏱ ${e.secs}s timed` : "🔢 counted"}
+                          {e.type === "time" ? `⏱ ${e.secs}s timed` : "# counted"}
                         </button>
                         ·
                         {isCustom ? (
@@ -1374,7 +1374,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     }, 1000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, phase, idx, round, mode, paused, timeLeft === 0]);
+  }, [screen, phase, idx, round, mode, paused, ex && ex.type, timeLeft === 0]);
 
   useEffect(() => {
     if (screen !== "player" || paused || phase !== "work" || mode === "hiit" || !ex || ex.type !== "reps") return;
@@ -1397,7 +1397,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     }, tempo * 1000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, phase, idx, round, mode, paused, side]);
+  }, [screen, phase, idx, round, mode, paused, side, ex && ex.type]);
 
   const launch = (list) => {
     setRound(1); setIdx(0);
@@ -1551,22 +1551,23 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         </div>
 
         <div style={{ display: "flex", gap: 10, padding: "0 16px 14px" }}>
-          {[["STREAK", streak + "d"], ["THIS WEEK", week], ["TOTAL", history.length]].map(([k, v]) => (
-            <div key={k} style={{ flex: 1, background: "#FFFFFF", borderRadius: 10, padding: "10px 0", textAlign: "center" }}>
-              <div style={{ fontFamily: DISPLAY, fontSize: 26, fontWeight: 700 }}>{v}</div>
+          {[["STREAK", streak > 0 ? `${streak}d 🔥` : "0d", "#E8590C"], ["THIS WEEK", week, "#4F7DF0"], ["TOTAL", history.length, "#2FA671"]].map(([k, v, c]) => (
+            <div key={k} style={{ flex: 1, background: "#FFFFFF", borderRadius: 10, padding: "10px 0", textAlign: "center", boxShadow: "0 1px 3px rgba(27,36,48,0.06)" }}>
+              <div style={{ fontFamily: DISPLAY, fontSize: 26, fontWeight: 700, color: c }}>{v}</div>
               <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686" }}>{k}</div>
             </div>
           ))}
         </div>
 
         <div style={{ display: "flex", gap: 8, padding: "0 16px 14px" }}>
-          {[["full", "FULL WORKOUT"], ["go", "🔥 BURN ON THE GO"]].map(([k, label]) => (
+          {[["full", "FULL WORKOUT", "linear-gradient(135deg, #4F7DF0 0%, #7B5BE6 100%)"], ["go", "🔥 BURN ON THE GO", "linear-gradient(135deg, #F1762A 0%, #E8433F 100%)"]].map(([k, label, grad]) => (
             <button key={k} onClick={() => setHomeTab(k)}
               style={{
                 ...S.pill, flex: 1, padding: "11px 0", borderRadius: 12,
                 fontFamily: DISPLAY, fontSize: 17, fontWeight: 700, letterSpacing: 1,
-                background: homeTab === k ? "#1B2430" : "#E4E7EC",
-                color: homeTab === k ? "#F5F6F8" : "#3D4756",
+                background: homeTab === k ? grad : "#FFFFFF",
+                color: homeTab === k ? "#FFFFFF" : "#3D4756",
+                boxShadow: homeTab === k ? "0 4px 12px rgba(27,36,48,0.18)" : "0 1px 3px rgba(27,36,48,0.06)",
               }}>
               {label}
             </button>
@@ -1611,7 +1612,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
             {homeTab === "go" ? "BURN ON THE GO — NO EQUIPMENT · 1 ROUND" : "TODAY'S WORKOUT"}
           </div>
           <button onClick={reshuffle}
-            style={{ ...S.pill, padding: "8px 16px", fontSize: 13, fontWeight: 700, background: "#5B8DEF", color: "#FFFFFF" }}>
+            style={{ ...S.pill, padding: "8px 16px", fontSize: 13, fontWeight: 700, background: "linear-gradient(135deg, #5B8DEF, #7B5BE6)", color: "#FFFFFF", boxShadow: "0 3px 8px rgba(91,141,239,0.35)" }}>
             ⟳ RESHUFFLE
           </button>
         </div>
@@ -1623,7 +1624,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               <div key={e.id} onClick={() => setPreview(open ? null : e.id)}
                 style={{ ...S.card, borderLeft: `4px solid ${g.color}` }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 56, height: 56, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#EFF1F5", borderRadius: 10 }}>
+                  <div style={{ width: 56, height: 56, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: `${g.color}1A`, borderRadius: 10 }}>
                     <Figure frames={resolveFrames(e)} color={g.color} size={52} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -1648,7 +1649,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                           border: "none", borderRadius: 8, padding: "2px 8px", cursor: "pointer",
                           fontSize: 12, lineHeight: 1.5, background: "#EFF1F5", color: "#6C7686",
                         }}>
-                        {e.type === "time" ? "⏱" : "🔢"}
+                        {e.type === "time" ? "⏱" : "#"}
                       </button>
                       <button
                         onClick={(ev) => { ev.stopPropagation(); toggleUni(e); }}
@@ -1695,10 +1696,12 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               <MiniStep value={goMins} unit="m" min={5} max={30} step={5} onChange={setGoMins} />
             </SetupRow>
             <SetupRow label="EFFORT" last>
-              <Seg options={[["easy", "😌 easy"], ["steady", "💪 steady"], ["hard", "🔥 hard"]]} value={goEffort} onChange={setGoEffort} />
+              <Seg options={[["easy", "😌 easy"], ["steady", "💪 steady"], ["hard", "🔥 hard"]]} value={goEffort} onChange={setGoEffort}
+                colors={{ easy: "#2FA671", steady: "#4F7DF0", hard: "#E8433F" }} />
             </SetupRow>
           </div>
-          <button onClick={startAnywhere} style={S.startBtn}>
+          <button onClick={startAnywhere}
+            style={{ ...S.startBtn, background: "linear-gradient(135deg, #F1762A 0%, #E8433F 100%)", boxShadow: "0 4px 12px rgba(232,67,63,0.35)" }}>
             🔥 START BURN — ~{goPlan.estMins} MIN · {anywhereWorkout.length} MOVES
           </button>
           <div style={{ textAlign: "center", fontSize: 12, color: "#9AA3B0", lineHeight: 1.5 }}>
@@ -1724,7 +1727,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               </select>
             </SetupRow>
             <SetupRow label="MODE">
-              <Seg options={[["circuit", "CIRCUIT"], ["hiit", "HIIT"]]} value={mode} onChange={setMode} />
+              <Seg options={[["circuit", "CIRCUIT"], ["hiit", "HIIT"]]} value={mode} onChange={setMode}
+                colors={{ circuit: "#1B2430", hiit: "#E8590C" }} />
             </SetupRow>
             <SetupRow label="ROUNDS">
               <MiniStep value={rounds} min={1} max={3} step={1} onChange={setRounds} />
@@ -1733,7 +1737,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               <MiniStep value={fullMins} unit="m" min={10} max={60} step={5} onChange={setFullMins} />
             </SetupRow>
             <SetupRow label="EFFORT" last>
-              <Seg options={[["easy", "😌 easy"], ["steady", "💪 steady"], ["hard", "🔥 hard"]]} value={fullEffort} onChange={setFullEffort} />
+              <Seg options={[["easy", "😌 easy"], ["steady", "💪 steady"], ["hard", "🔥 hard"]]} value={fullEffort} onChange={setFullEffort}
+                colors={{ easy: "#2FA671", steady: "#4F7DF0", hard: "#E8433F" }} />
             </SetupRow>
           </div>
           <button onClick={start} style={S.startBtn}>
@@ -1905,7 +1910,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
             <button onClick={togglePlayerType}
               title="Tap to switch this exercise between timed and counted"
               style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: "#EFF1F5", color: "#6C7686" }}>
-              {ex.type === "time" ? `⏱ TIMED ${secsOf(ex)}s` : "🔢 COUNTED"}
+              {ex.type === "time" ? `⏱ TIMED ${secsOf(ex)}s` : "# COUNTED"}
             </button>
           </div>
         )}
