@@ -59,7 +59,6 @@ export function SummaryBody({ m }) {
 
       {wt && (
         <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 14, display: "flex", alignItems: "center", gap: 14 }}>
-          <span style={{ fontSize: 26 }}>⚖️</span>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 11, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, textTransform: "uppercase" }}>
               Weight change

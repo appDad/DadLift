@@ -575,7 +575,7 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, comm
                           )}
                           <div style={{ flex: 1 }} />
                           <Thumbs value={ratings[e.id] || 0} onChange={(v) => onRate(e.id, v)} />
-                          {isAdmin && (isCustom || commBy) && (
+                          {isAdmin && (
                             <button onClick={() => onAdminDelete(e.id)} style={{ ...S.ghostBtn, color: "#E85D5D", fontWeight: 700 }}>delete</button>
                           )}
                           {!isAdmin && isCustom && (
@@ -732,7 +732,9 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       if (p) out = { ...out, ...p };
       return out;
     };
-    return [...BUILTIN, ...comm.map(tagEq), ...customEx.map(tagEq)].map(applyOverride);
+    return [...BUILTIN, ...comm.map(tagEq), ...customEx.map(tagEq)]
+      .map(applyOverride)
+      .filter((e) => !e.hidden); // admin-hidden built-ins disappear for everyone
   }, [customEx, community, hiddenComm, extEquip, exOverrides, typeOver]);
   const communityBy = useMemo(
     () => Object.fromEntries(community.map((c) => [c.ex.id, c.by])),
@@ -1154,7 +1156,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     setHiddenComm(next);
     saveJSON("hiddencomm", next);
   };
-  /* admin: delete an exercise for EVERYONE (unpublish + drop from my custom) */
+  /* admin: delete an exercise for EVERYONE. Custom/community docs are removed
+     outright; built-ins live in code, so they're hidden globally via an override. */
   const adminDeleteExercise = (id) => {
     unpublishExercise(id);
     setCommunity((prev) => prev.filter((c) => c.ex.id !== id));
@@ -1163,6 +1166,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       setCustomEx(next);
       saveJSON("customex", next);
     }
+    if (BUILTIN.some((b) => b.id === id)) setAdminOverride(id, { hidden: true });
   };
   const setCustomEq = (id, eq) => {
     const next = customEx.map((e) => (e.id === id ? { ...e, eq: eq || undefined } : e));
@@ -1653,7 +1657,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <button onClick={() => setScreen("weigh")}
               style={{ ...S.pill, background: weighDue ? "#2FA671" : "#E4E7EC", color: weighDue ? "#FFFFFF" : "#3D4756" }}>
-              ⚖ weigh
+              weigh
             </button>
             <button onClick={() => setScreen("stats")} style={{ ...S.pill, background: "#E4E7EC", color: "#3D4756" }}>
               stats
@@ -1689,7 +1693,6 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12,
               boxShadow: "0 4px 12px rgba(47,166,113,0.3)",
             }}>
-            <span style={{ fontSize: 24 }}>⚖️</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontFamily: DISPLAY, fontSize: 18, fontWeight: 700, letterSpacing: 0.5 }}>
                 {weightsSorted.length === 0 ? "LOG YOUR FIRST WEIGH-IN" : "WEEKLY WEIGH-IN DUE"}
@@ -1876,16 +1879,18 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                           </div>
                         )}
                         <div style={{ flex: 1 }} />
-                        <button onClick={(ev) => { ev.stopPropagation(); rate(e.id, ratings[e.id] === 1 ? 0 : 1); }}
-                          title="Favorite — show this more often"
-                          style={{ border: "none", background: ratings[e.id] === 1 ? "#D8F3E5" : "#EFF1F5", outline: ratings[e.id] === 1 ? "2px solid #2FA671" : "none", borderRadius: 999, padding: "6px 12px", cursor: "pointer", fontSize: 15, lineHeight: 1 }}>
-                          👍
-                        </button>
-                        <button onClick={(ev) => { ev.stopPropagation(); banExercise(e.id); }}
-                          title="Swap it out — and show it less often"
-                          style={{ border: "none", background: "#FCE8E6", borderRadius: 999, padding: "6px 12px", cursor: "pointer", fontSize: 15, lineHeight: 1 }}>
-                          👎
-                        </button>
+                        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                          <button onClick={(ev) => { ev.stopPropagation(); rate(e.id, ratings[e.id] === 1 ? 0 : 1); }}
+                            title="Favorite — show this more often"
+                            style={{ border: "none", background: ratings[e.id] === 1 ? "#D8F3E5" : "#EFF1F5", outline: ratings[e.id] === 1 ? "2px solid #2FA671" : "none", borderRadius: 999, padding: "6px 12px", cursor: "pointer", fontSize: 15, lineHeight: 1 }}>
+                            👍
+                          </button>
+                          <button onClick={(ev) => { ev.stopPropagation(); banExercise(e.id); }}
+                            title="Swap it out — and show it less often"
+                            style={{ border: "none", background: "#FCE8E6", borderRadius: 999, padding: "6px 12px", cursor: "pointer", fontSize: 15, lineHeight: 1 }}>
+                            👎
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
