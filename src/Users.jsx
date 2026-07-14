@@ -5,7 +5,7 @@ import { styles, DISPLAY, FONT_CSS } from "./theme";
 
 /* Admin-only roster. Each doc in /allowlist is keyed by lowercase email;
    Firestore rules let those accounts read/write their own /users/{uid} data. */
-export default function Users({ onBack }) {
+export default function Users({ onBack, nav }) {
   const [list, setList] = useState(null);
   const [email, setEmail] = useState("");
   const [msg, setMsg] = useState(null);
@@ -49,6 +49,7 @@ export default function Users({ onBack }) {
   return (
     <div style={S.app}>
       <style>{FONT_CSS}</style>
+      {nav}
       <div style={{ padding: "20px 20px 12px", display: "flex", alignItems: "center", gap: 12 }}>
         <button onClick={onBack} style={S.ghostBtn}>‹ back</button>
         <div style={{ fontFamily: DISPLAY, fontSize: 26, fontWeight: 700, letterSpacing: 1 }}>USERS</div>

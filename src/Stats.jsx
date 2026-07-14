@@ -115,15 +115,15 @@ export function SummaryBody({ m }) {
   );
 }
 
-export default function Stats({ history, onBack, shareOn, shareLink, onToggleShare, onCopyShare, shareCopied }) {
+export default function Stats({ history, onBack, shareOn, shareLink, onToggleShare, onCopyShare, shareCopied, nav }) {
   const S = styles;
   const m = useMemo(() => computeSummary(history), [history]);
 
   return (
     <div style={S.app}>
       <style>{FONT_CSS}</style>
-      <div style={{ padding: "20px 20px 12px", display: "flex", alignItems: "center", gap: 12 }}>
-        <button onClick={onBack} style={S.ghostBtn}>‹ back</button>
+      {nav}
+      <div style={{ padding: "20px 20px 12px" }}>
         <div style={{ fontFamily: DISPLAY, fontSize: 26, fontWeight: 700, letterSpacing: 1 }}>STATS</div>
       </div>
 

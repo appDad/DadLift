@@ -10,6 +10,7 @@ import { newShareId, shareUrl, publishSnapshot, removeSnapshot } from "./share";
 import { styles, DISPLAY, FONT_CSS } from "./theme";
 import Stats from "./Stats.jsx";
 import Users from "./Users.jsx";
+import NavBar from "./Nav.jsx";
 
 /* ============ deterministic daily RNG ============ */
 function mulberry32(a) {
@@ -290,7 +291,7 @@ function Stepper({ label, value, unit, min, max, step, onChange }) {
   );
 }
 
-function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, readySecs, setReadySecs, owned, onToggleOwned, focusEquip, isAdmin, extEquip, onAddCatalog, onRemoveCatalog, onClearHistory, onBack, userEmail, onSignOut }) {
+function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, readySecs, setReadySecs, owned, onToggleOwned, focusEquip, isAdmin, extEquip, onAddCatalog, onRemoveCatalog, onClearHistory, onBack, userEmail, onSignOut, nav }) {
   const S = styles;
   const [armClear, setArmClear] = useState(false); // two-tap confirm for the destructive bit
   const [catLabel, setCatLabel] = useState("");
@@ -303,8 +304,8 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
   return (
     <div style={S.app}>
       <style>{FONT_CSS}</style>
-      <div style={{ padding: "20px 20px 12px", display: "flex", alignItems: "center", gap: 12 }}>
-        <button onClick={onBack} style={S.ghostBtn}>‹ back</button>
+      {nav}
+      <div style={{ padding: "20px 20px 12px" }}>
         <div style={{ fontFamily: DISPLAY, fontSize: 26, fontWeight: 700, letterSpacing: 1 }}>SETTINGS</div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px" }}>
@@ -424,7 +425,7 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
 }
 
 /* ============ library screen ============ */
-function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, communityBy, onHide, ownedEquip, ownedCount, onSetEq, uniOf, onToggleUni, isAdmin, onToggleType, cadenceOf, onSetCad, onAdminDelete }) {
+function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, communityBy, onHide, ownedEquip, ownedCount, onSetEq, uniOf, onToggleUni, isAdmin, onToggleType, cadenceOf, onSetCad, onAdminDelete, nav }) {
   const [openId, setOpenId] = useState(null);
   const [tab, setTab] = useState("browse"); // browse | add | export
   const [pasteVal, setPasteVal] = useState("");
@@ -479,8 +480,8 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, comm
   return (
     <div style={S.app}>
       <style>{FONT_CSS}</style>
-      <div style={{ padding: "20px 20px 12px", display: "flex", alignItems: "center", gap: 12 }}>
-        <button onClick={onBack} style={S.ghostBtn}>‹ back</button>
+      {nav}
+      <div style={{ padding: "20px 20px 12px" }}>
         <div style={{ fontFamily: DISPLAY, fontSize: 26, fontWeight: 700, letterSpacing: 1 }}>EXERCISE LIBRARY</div>
       </div>
       <div style={{ display: "flex", gap: 8, padding: "0 16px 14px" }}>
@@ -1459,6 +1460,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       uniOf={effUni} onToggleUni={toggleUni}
       isAdmin={isAdmin} onToggleType={toggleType}
       cadenceOf={cadenceOf} onSetCad={setCad} onAdminDelete={adminDeleteExercise}
+      nav={<NavBar current="library" onNav={setScreen} weighDue={weighDue} />}
       onBack={() => setScreen("home")} />;
   }
   if (screen === "settings") {
@@ -1470,15 +1472,18 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       focusEquip={settingsFocus === "equip"}
       isAdmin={isAdmin} extEquip={extEquip} onAddCatalog={addCatalogEquip} onRemoveCatalog={removeCatalogEquip}
       onClearHistory={clearHistory} onBack={() => { setSettingsFocus(null); setScreen("home"); }}
+      nav={<NavBar current="settings" onNav={setScreen} weighDue={weighDue} />}
       userEmail={user.email} onSignOut={onSignOut} />;
   }
   if (screen === "stats") {
     return <Stats history={history} onBack={() => setScreen("home")}
       shareOn={share.on} shareLink={share.id ? shareUrl(share.id) : ""}
+      nav={<NavBar current="stats" onNav={setScreen} weighDue={weighDue} />}
       onToggleShare={setSharing} onCopyShare={copyShareLink} shareCopied={shareCopied} />;
   }
   if (screen === "users" && isAdmin) {
-    return <Users onBack={() => setScreen("home")} />;
+    return <Users onBack={() => setScreen("home")}
+      nav={<NavBar current="users" onNav={setScreen} weighDue={weighDue} />} />;
   }
 
   /* ---------- WEIGH-IN ---------- */
@@ -1502,9 +1507,9 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     return (
       <div style={S.app}>
         <style>{FONT_CSS}</style>
-        <div style={{ ...S.header, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <NavBar current="weigh" onNav={setScreen} weighDue={weighDue} />
+        <div style={{ ...S.header }}>
           <div style={S.title}>WEIGH-IN</div>
-          <button onClick={() => setScreen("home")} style={{ ...S.pill, background: "#E4E7EC", color: "#3D4756" }}>done</button>
         </div>
 
         <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 14 }}>
@@ -1652,25 +1657,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     return (
       <div style={S.app}>
         <style>{FONT_CSS}</style>
-        <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "14px 16px 2px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
-          {[
-            ["weigh", "WEIGH", weighDue],
-            ["stats", "STATS", false],
-            ["library", "LIBRARY", false],
-            ["settings", "SETTINGS", false],
-          ].map(([scr, label, hot]) => (
-            <button key={scr} onClick={() => setScreen(scr)}
-              style={{
-                flexShrink: 0, border: "none", borderRadius: 999, cursor: "pointer",
-                padding: "9px 20px", fontFamily: DISPLAY, fontSize: 15, fontWeight: 700, letterSpacing: 1,
-                background: hot ? "#2FA671" : "#FFFFFF",
-                color: hot ? "#FFFFFF" : "#3D4756",
-                boxShadow: hot ? "0 3px 10px rgba(47,166,113,0.4)" : "0 1px 3px rgba(27,36,48,0.08)",
-              }}>
-              {label}
-            </button>
-          ))}
-        </div>
+        <NavBar current="home" onNav={setScreen} weighDue={weighDue} />
 
         <div style={{ ...S.header, padding: "14px 20px 14px", display: "flex", alignItems: "center", gap: 12 }}>
           <img src="/icons/dadlift-icon-192.png" alt="" width={56} height={56} style={{ borderRadius: "50%", flexShrink: 0 }} />
@@ -1815,13 +1802,13 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         )}
 
         <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "12px 14px", margin: "0 16px 14px", boxShadow: "0 1px 3px rgba(27,36,48,0.06)", display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ flex: 1, fontSize: 12, color: "#6C7686", lineHeight: 1.45 }}>
-            Same day = same workout — reshuffle for a new draw. 👍 shows a move more, 👎 swaps it out. Tap a card for form.
-          </div>
           <button onClick={reshuffle}
             style={{ ...S.pill, flexShrink: 0, padding: "10px 16px", fontSize: 13, fontWeight: 700, background: "linear-gradient(135deg, #5B8DEF, #7B5BE6)", color: "#FFFFFF", boxShadow: "0 3px 8px rgba(91,141,239,0.35)" }}>
             ⟳ RESHUFFLE
           </button>
+          <div style={{ flex: 1, fontSize: 12, color: "#6C7686", lineHeight: 1.45 }}>
+            Same day = same workout — reshuffle for a new draw. 👍 shows a move more, 👎 swaps it out. Tap a card for form.
+          </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px" }}>
           {homeList.map((e) => {
