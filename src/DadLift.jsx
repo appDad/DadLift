@@ -548,7 +548,7 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, comm
                             color: uniOf(e) ? "#2456B3" : "#6C7686",
                             outline: uniOf(e) ? "1.5px solid #5B8DEF" : "none",
                           }}>
-                          {uniOf(e) ? "per-side ✓" : "per-side"}
+                          {uniOf(e) ? "L/R both sides ✓" : "L/R both sides"}
                         </button>
                       </div>
                     </div>
@@ -1502,9 +1502,31 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         </div>
         )}
 
+        {homeTab === "full" && (
+          <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "0 16px 14px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+            {["balanced", ...Object.keys(GROUPS)].map((gk) => {
+              const on = emphasis === gk;
+              const c = GROUPS[gk] ? GROUPS[gk].color : "#7B5BE6";
+              return (
+                <button key={gk} onClick={() => setEmphasis(gk)}
+                  style={{
+                    flexShrink: 0, border: "none", borderRadius: 999, cursor: "pointer",
+                    padding: "9px 18px", fontFamily: DISPLAY, fontSize: 16, fontWeight: 700, letterSpacing: 0.5,
+                    background: on ? c : "#FFFFFF",
+                    color: on ? "#FFFFFF" : "#6C7686",
+                    boxShadow: on ? `0 3px 10px ${c}66` : "0 1px 3px rgba(27,36,48,0.08)",
+                  }}>
+                  {gk === "balanced" ? "ALL-ROUND" : GROUPS[gk].label.toUpperCase()}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px 8px" }}>
           <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700 }}>
-            {homeTab === "go" ? "BURN ON THE GO — NO EQUIPMENT · 1 ROUND" : "TODAY'S WORKOUT"}
+            {homeTab === "go" ? "BURN ON THE GO — NO EQUIPMENT · 1 ROUND"
+              : emphasis === "balanced" ? "TODAY'S WORKOUT" : `${GROUPS[emphasis].label.toUpperCase()} FOCUS`}
           </div>
           <button onClick={reshuffle}
             style={{ ...S.pill, padding: "8px 16px", fontSize: 13, fontWeight: 700, background: "linear-gradient(135deg, #5B8DEF, #7B5BE6)", color: "#FFFFFF", boxShadow: "0 3px 8px rgba(91,141,239,0.35)" }}>
@@ -1556,7 +1578,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                           color: effUni(e) ? "#2456B3" : "#6C7686",
                           outline: effUni(e) ? "1.5px solid #5B8DEF" : "none",
                         }}>
-                        ×2
+                        L/R
                       </button>
                       <button
                         onClick={(ev) => { ev.stopPropagation(); rate(e.id, ratings[e.id] === 1 ? 0 : 1); }}
@@ -1607,20 +1629,6 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         ) : (
         <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "4px 16px" }}>
-            <SetupRow label="FOCUS">
-              <select
-                value={emphasis}
-                onChange={(ev) => setEmphasis(ev.target.value)}
-                style={{
-                  border: "1px solid #DDE2E9", borderRadius: 10, background: "#EFF1F5", color: "#1B2430",
-                  fontSize: 14, fontWeight: 600, padding: "9px 12px", minWidth: 150,
-                }}>
-                <option value="balanced">⚖️ balanced</option>
-                {Object.keys(GROUPS).map((g) => (
-                  <option key={g} value={g}>{GROUPS[g].label.toLowerCase()}</option>
-                ))}
-              </select>
-            </SetupRow>
             <SetupRow label="MODE">
               <Seg options={[["circuit", "CIRCUIT"], ["hiit", "HIIT"]]} value={mode} onChange={setMode}
                 colors={{ circuit: "#1B2430", hiit: "#E8590C" }} />
@@ -1792,7 +1800,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                 background: effUni(ex) ? "#DCE7FB" : "#EFF1F5",
                 color: effUni(ex) ? "#2456B3" : "#6C7686",
               }}>
-              {effUni(ex) ? "×2 BOTH SIDES ✓" : "×2 BOTH SIDES"}
+              {effUni(ex) ? "L/R BOTH SIDES ✓" : "L/R BOTH SIDES"}
             </button>
             <button onClick={togglePlayerType}
               title="Tap to switch this exercise between timed and counted"
