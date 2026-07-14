@@ -240,24 +240,6 @@ function speak(txt) {
   } catch (e) { /* no tts */ }
 }
 
-/* parse "14", "fourteen", "twenty five" … from speech transcripts */
-const WORDNUMS = {
-  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
-  ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16,
-  seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50,
-};
-function parseRepCount(transcripts) {
-  for (const t of transcripts) {
-    const m = t.match(/\d{1,3}/);
-    if (m) { const n = +m[0]; if (n > 0 && n < 300) return n; }
-    let total = 0, found = false;
-    for (const w of t.toLowerCase().split(/\s+/)) {
-      if (WORDNUMS[w] != null) { total += WORDNUMS[w]; found = true; }
-    }
-    if (found && total > 0 && total < 300) return total;
-  }
-  return null;
-}
 
 /* ============ AI coach — Firebase AI Logic (Gemini) ============ */
 async function fetchCoachLine(history, todaySummary) {
@@ -308,7 +290,7 @@ function Stepper({ label, value, unit, min, max, step, onChange }) {
   );
 }
 
-function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, micOn, setMicOn, readySecs, setReadySecs, owned, onToggleOwned, focusEquip, isAdmin, extEquip, onAddCatalog, onRemoveCatalog, onClearHistory, onBack, userEmail, onSignOut }) {
+function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, readySecs, setReadySecs, owned, onToggleOwned, focusEquip, isAdmin, extEquip, onAddCatalog, onRemoveCatalog, onClearHistory, onBack, userEmail, onSignOut }) {
   const S = styles;
   const [armClear, setArmClear] = useState(false); // two-tap confirm for the destructive bit
   const [catLabel, setCatLabel] = useState("");
@@ -333,13 +315,6 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
         <div style={S.settingsLabel}>HIIT MODE</div>
         <Stepper label="Work interval" value={hiit[0]} unit="s" min={10} max={90} step={5} onChange={(v) => setHiit([v, hiit[1]])} />
         <Stepper label="Rest interval" value={hiit[1]} unit="s" min={5} max={60} step={5} onChange={(v) => setHiit([hiit[0], v])} />
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", borderRadius: 12, padding: "12px 14px" }}>
-          <div style={{ fontSize: 14, color: "#3D4756" }}>Mic: say your rep count after max-effort sets</div>
-          <button onClick={() => setMicOn(!micOn)}
-            style={{ ...S.pill, background: micOn ? "#1B2430" : "#E4E7EC", color: micOn ? "#F5F6F8" : "#3D4756" }}>
-            {micOn ? "ON" : "OFF"}
-          </button>
-        </div>
         <div style={S.settingsLabel}>BOTH MODES</div>
         <Stepper label="Rest between rounds" value={roundRest} unit="s" min={15} max={180} step={15} onChange={setRoundRest} />
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", borderRadius: 12, padding: "12px 14px" }}>
@@ -657,9 +632,6 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [summaryRows, setSummaryRows] = useState([]);
   const [lastEntry, setLastEntry] = useState(null);
   const [doneExList, setDoneExList] = useState([]); // snapshot for the DONE screen — rating changes re-roll the picker
-  const [micOn, setMicOn] = useState(true);
-  const [heard, setHeard] = useState(null); // last spoken rep count picked up by the mic
-  const [relisten, setRelisten] = useState(false); // re-record tapped — show the listening hint
   const [ratings, setRatings] = useState({}); // exercise id -> 1 | 0 | -1
   const [uniOverride, setUniOverride] = useState({}); // exercise id -> true/false two-pass override
   const [community, setCommunity] = useState([]); // [{ex, by}] shared by other users
@@ -680,7 +652,6 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [shuffleN, setShuffleN] = useState(0); // today's reshuffle count — new seed each press
   const [excluded, setExcluded] = useState([]); // exercises thumbed out of TODAY'S workout
   const savedRef = useRef(false);
-  const recRef = useRef(null);
   // live counters mirrored into refs so advance() (called from timer closures) sees fresh values
   const repRef = useRef(0);
   const timeLeftRef = useRef(0);
@@ -862,7 +833,6 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         setMode(s.mode ?? "circuit"); setHiit(s.hiit ?? [40, 20]);
         setRestSecs(s.restSecs ?? 15); setRoundRest(s.roundRest ?? 45);
         setEmphasis(s.emphasis ?? "balanced");
-        setMicOn(s.micOn ?? true);
         setReadySecs(s.readySecs ?? 5);
         setGoMins(s.goMins ?? 10);
         setGoEffort(s.goEffort ?? "steady");
@@ -878,8 +848,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   }, []);
   useEffect(() => {
     if (!loaded) return;
-    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned }, { debounce: 600 });
-  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned]);
+    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned }, { debounce: 600 });
+  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned]);
 
   /* screen wake lock while working out — counting used to die when the phone locked */
   useEffect(() => {
@@ -1088,65 +1058,12 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     if (changed) publishExercise(changed, (user.email || "").toLowerCase()); // keep the shared copy in sync
   };
 
-  /* listen for a spoken rep count (HIIT AMRAP sets) and write it into the session log */
-  const stopListening = () => {
-    try { recRef.current && recRef.current.abort(); } catch (e) { /* already stopped */ }
-    recRef.current = null;
-  };
-  /* If followUp is set (HIIT flow), the next-exercise announcement is held back
-     until the user answers or ~7s passes — so speech and mic never fight. */
-  const listenForReps = (slotIndex, followUp = null) => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { if (followUp) say(followUp); return; }
-    stopListening();
-    let rec;
-    try { rec = new SR(); } catch (e) { if (followUp) say(followUp); return; }
-    recRef.current = rec;
-    let settled = false;
-    const settle = (spoken) => {
-      if (settled) return;
-      settled = true;
-      if (recRef.current !== rec) return; // aborted because the workout moved on
-      if (followUp) say(spoken != null ? `${spoken}. Logged. ${followUp}` : followUp);
-      else if (spoken != null) say(`${spoken}. Logged.`);
-    };
-    rec.lang = "en-US";
-    rec.interimResults = false;
-    rec.maxAlternatives = 3;
-    rec.onresult = (e) => {
-      const alts = Array.from(e.results[0]).map((a) => a.transcript);
-      const n = parseRepCount(alts);
-      if (n == null) { settle(null); return; }
-      const slot = sessionLogRef.current[slotIndex];
-      if (slot) slot.value = n;
-      setSummaryRows((prev) => (prev.length > slotIndex ? prev.map((r, i) => (i === slotIndex ? { ...r, value: n } : r)) : prev));
-      setHeard(n);
-      settle(n);
-    };
-    rec.onerror = () => settle(null); // no mic / denied — summary editing still works
-    rec.onend = () => settle(null);
-    try { rec.start(); } catch (e) { settle(null); }
-    setTimeout(() => {
-      if (!settled) { try { rec.abort(); } catch (e) { /* gone */ } settle(null); }
-    }, 7000);
-  };
-
-  /* tap-adjust rep entry during rest — the fallback when speech doesn't register */
+  /* adjust the just-finished set's rep count with the big +/- during rest */
   const applyManualReps = (n) => {
-    stopListening(); // no point letting the mic overwrite a manual number
     const slotIndex = sessionLogRef.current.length - 1;
     const slot = sessionLogRef.current[slotIndex];
     if (slot) slot.value = n;
     setSummaryRows((prev) => (prev.length > slotIndex ? prev.map((r, i) => (i === slotIndex ? { ...r, value: n } : r)) : prev));
-    setHeard(n); // reuse the "logged ✓" confirmation
-  };
-
-  /* reopen the mic for another attempt at the rep count */
-  const rerecord = () => {
-    const slotIndex = sessionLogRef.current.length - 1;
-    setHeard(null);
-    setRelisten(true);
-    listenForReps(slotIndex);
   };
 
   /* flip the CURRENT exercise's both-sides mode mid-workout */
@@ -1207,39 +1124,18 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const advance = (partial = false) => {
     logDone(partial);
     beep(1200, 0.25);
-    // both modes: ask FIRST, hold the announcement until answered (or ~7s)
-    const askReps = ex.type === "reps" && micOn;
-    const slot = sessionLogRef.current.length - 1;
-
-    const goRest = (announceText, secs) => {
-      setPhase("rest"); setTimeLeft(secs);
-      setRelisten(false);
-      if (askReps) {
-        setHeard(null);
-        say("How many reps?");
-        setTimeout(() => listenForReps(slot, announceText), 900);
-      } else {
-        say(announceText);
-      }
-    };
+    const goRest = (announceText, secs) => { setPhase("rest"); setTimeLeft(secs); say(announceText); };
 
     if (idx + 1 < exList.length) {
       goRest(`Rest. Next up: ${exList[idx + 1].name}`, mode === "hiit" ? hiit[1] : restSecs);
     } else if (round < sessionRounds) {
       goRest(`Round ${round} done. Long rest.`, roundRest);
-    } else if (askReps) {
-      // final set: ask for the count, summary opens underneath and gets the answer
-      setHeard(null);
-      say("How many reps?");
-      setTimeout(() => listenForReps(slot, "Workout complete."), 900);
-      finish(true);
     } else {
       finish();
     }
   };
 
   const startNext = () => {
-    stopListening(); setHeard(null);
     let nextExObj;
     if (idx + 1 < exList.length) { setIdx(idx + 1); nextExObj = exList[idx + 1]; }
     else { setRound(round + 1); setIdx(0); nextExObj = exList[0]; }
@@ -1290,7 +1186,6 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const saveSummary = () => {
     if (savedRef.current) return;
     savedRef.current = true;
-    stopListening();
     const done = summaryRows.filter((r) => r.value > 0);
     const groups = {};
     done.forEach((r) => { groups[r.grp] = (groups[r.grp] || 0) + 1; });
@@ -1402,7 +1297,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const launch = (list) => {
     setRound(1); setIdx(0);
     savedRef.current = false; setCoachLine(null); setLastEntry(null);
-    stopListening(); setHeard(null); setPaused(false); setRelisten(false);
+    setPaused(false);
     sessionLogRef.current = [];
     beginSet(list[0]);
     setScreen("player");
@@ -1440,7 +1335,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   if (screen === "settings") {
     return <Settings tempo={tempo} setTempo={setTempo} restSecs={restSecs} setRestSecs={setRestSecs}
       roundRest={roundRest} setRoundRest={setRoundRest} hiit={hiit} setHiit={setHiit}
-      voiceOn={voiceOn} setVoiceOn={setVoiceOn} micOn={micOn} setMicOn={setMicOn}
+      voiceOn={voiceOn} setVoiceOn={setVoiceOn}
       readySecs={readySecs} setReadySecs={setReadySecs}
       owned={owned} onToggleOwned={toggleOwned}
       focusEquip={settingsFocus === "equip"}
@@ -1504,7 +1399,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           <button onClick={saveSummary} style={S.startBtn}>
             SAVE WORKOUT — {doneCount} SET{doneCount === 1 ? "" : "S"}
           </button>
-          <button onClick={() => { stopListening(); setQuickEx(null); setScreen("home"); }} style={{ ...S.ghostBtn, color: "#E85D5D" }}>discard, save nothing</button>
+          <button onClick={() => { setQuickEx(null); setScreen("home"); }} style={{ ...S.ghostBtn, color: "#E85D5D" }}>discard, save nothing</button>
         </div>
       </div>
     );
@@ -1829,34 +1724,26 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         <div style={{ fontFamily: DISPLAY, fontSize: 30, fontWeight: 700, letterSpacing: 0.5 }}>{shown.name}</div>
 
         {isRest && lastRec && lastRec.unit === "reps" && (
-          <>
-            {(micOn || relisten) && (
-              <div style={{ fontSize: 13, fontWeight: 600, color: heard != null ? "#2FA671" : "#B47E10" }}>
-                {heard != null ? `Got ${heard} reps — logged ✓` : "🎤 Say how many reps you got"}
-              </div>
-            )}
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: "100%", maxWidth: 360, background: "#FFFFFF", borderRadius: 16, padding: "14px 16px 18px", boxShadow: "0 4px 14px rgba(27,36,48,0.10)" }}>
+            <div style={{ fontSize: 11, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, marginBottom: 10 }}>
+              HOW MANY REPS? — TAP TO ADJUST
+            </div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18 }}>
               <button
                 onClick={() => applyManualReps(Math.max(0, (lastRec.value || 0) - 1))}
-                style={{ border: "none", borderRadius: 10, width: 42, height: 42, fontSize: 22, fontWeight: 700, background: "#E4E7EC", color: "#1B2430", cursor: "pointer", lineHeight: 1 }}>
+                style={{ border: "none", borderRadius: 16, width: 72, height: 72, fontSize: 40, fontWeight: 700, background: "#FCE8E6", color: "#E8433F", cursor: "pointer", lineHeight: 1 }}>
                 −
               </button>
-              <div style={{ fontFamily: DISPLAY, fontSize: 30, fontWeight: 700, minWidth: 56, textAlign: "center" }}>
+              <div style={{ fontFamily: DISPLAY, fontSize: 60, fontWeight: 700, minWidth: 90, textAlign: "center", color: g.color }}>
                 {lastRec.value || 0}
               </div>
               <button
                 onClick={() => applyManualReps(Math.min(999, (lastRec.value || 0) + 1))}
-                style={{ border: "none", borderRadius: 10, width: 42, height: 42, fontSize: 22, fontWeight: 700, background: "#E4E7EC", color: "#1B2430", cursor: "pointer", lineHeight: 1 }}>
+                style={{ border: "none", borderRadius: 16, width: 72, height: 72, fontSize: 40, fontWeight: 700, background: "#DFF5EA", color: "#2FA671", cursor: "pointer", lineHeight: 1 }}>
                 +
               </button>
-              <button
-                onClick={rerecord}
-                title="Open the mic again and say the number"
-                style={{ ...S.pill, background: "#E4E7EC", color: "#3D4756", fontSize: 12, marginLeft: 6 }}>
-                🎤 SAY IT
-              </button>
             </div>
-          </>
+          </div>
         )}
 
         {isRest || isReady || mode === "hiit" || ex.type === "time" ? (
