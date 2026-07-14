@@ -1590,8 +1590,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                     <div style={{ fontSize: 11, letterSpacing: 1.5, color: g.color, fontWeight: 700, textTransform: "uppercase" }}>{g.label}</div>
                     <div style={{ fontFamily: DISPLAY, fontSize: 20, fontWeight: 600, letterSpacing: 0.5 }}>{e.name}</div>
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, flexShrink: 0 }}>
-                    <div style={{ fontSize: 13, color: "#6C7686" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+                    <div style={{ fontFamily: DISPLAY, fontSize: 18, fontWeight: 700, color: "#1B2430" }}>
                       {cardHiit ? `${hiit[0]}s` : e.type === "time" ? `${Math.max(10, Math.round(e.secs * cardScale))}s` : (
                         <>
                           ×{Math.max(4, Math.round((repTargets[e.id] || workout.reps) * cardScale))}
@@ -1600,47 +1600,48 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                         </>
                       )}
                     </div>
-                    <div style={{ display: "flex", gap: 4 }}>
-                      <button
-                        onClick={(ev) => { ev.stopPropagation(); toggleType(e); }}
-                        title="Tap to switch between timed and counted"
-                        style={{
-                          border: "none", borderRadius: 8, padding: "2px 8px", cursor: "pointer",
-                          fontSize: 12, lineHeight: 1.5, background: "#EFF1F5", color: "#6C7686",
-                        }}>
-                        {e.type === "time" ? "⏱" : "#"}
-                      </button>
-                      <button
-                        onClick={(ev) => { ev.stopPropagation(); toggleUni(e); }}
-                        title="Both sides — run the set twice, once per side/direction"
-                        style={{
-                          border: "none", borderRadius: 8, padding: "2px 8px", cursor: "pointer",
-                          fontSize: 12, fontWeight: 700, lineHeight: 1.5,
-                          background: effUni(e) ? "#DCE7FB" : "#EFF1F5",
-                          color: effUni(e) ? "#2456B3" : "#6C7686",
-                          outline: effUni(e) ? "1.5px solid #5B8DEF" : "none",
-                        }}>
-                        L/R
-                      </button>
-                      <button
-                        onClick={(ev) => { ev.stopPropagation(); rate(e.id, ratings[e.id] === 1 ? 0 : 1); }}
-                        title="Favorite — show this more often"
-                        style={{ border: "none", background: ratings[e.id] === 1 ? "#D8F3E5" : "#EFF1F5", outline: ratings[e.id] === 1 ? "2px solid #2FA671" : "none", borderRadius: 8, padding: "2px 9px", cursor: "pointer", fontSize: 13, lineHeight: 1.4 }}>
-                        👍
-                      </button>
-                      <button
-                        onClick={(ev) => { ev.stopPropagation(); banExercise(e.id); }}
-                        title="Swap it out — and show it less often"
-                        style={{ border: "none", background: "#EFF1F5", borderRadius: 8, padding: "2px 9px", cursor: "pointer", fontSize: 13, lineHeight: 1.4 }}>
-                        👎
-                      </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      {e.type === "time" && (
+                        <span style={{ fontSize: 9, letterSpacing: 0.5, fontWeight: 700, color: "#6C7686", background: "#EFF1F5", borderRadius: 5, padding: "2px 6px" }}>⏱ TIMED</span>
+                      )}
+                      {effUni(e) && (
+                        <span style={{ fontSize: 9, letterSpacing: 0.5, fontWeight: 700, color: "#2456B3", background: "#DCE7FB", borderRadius: 5, padding: "2px 6px" }}>L/R</span>
+                      )}
+                      {ratings[e.id] === 1 && <span style={{ fontSize: 11 }}>👍</span>}
+                      <span style={{ fontSize: 14, color: "#9AA3B0", transition: "transform .2s", transform: open ? "rotate(180deg)" : "none", display: "inline-block" }}>▾</span>
                     </div>
                   </div>
                 </div>
                 {open && (
-                  <div style={{ marginTop: 12, display: "flex", gap: 14, alignItems: "center" }}>
-                    <Figure frames={resolveFrames(e)} color={g.color} size={120} />
-                    <div style={{ fontSize: 14, lineHeight: 1.5, color: "#3D4756" }}>{e.cue}</div>
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                      <Figure frames={resolveFrames(e)} color={g.color} size={120} />
+                      <div style={{ fontSize: 14, lineHeight: 1.5, color: "#3D4756" }}>{e.cue}</div>
+                    </div>
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #EFF1F5" }}>
+                      <div style={{ fontSize: 9, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700, marginBottom: 8 }}>ADJUST THIS EXERCISE</div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <button onClick={(ev) => { ev.stopPropagation(); toggleType(e); }}
+                          style={{ ...S.pill, padding: "7px 12px", fontSize: 12, background: "#EFF1F5", color: "#3D4756" }}>
+                          {e.type === "time" ? `⏱ ${Math.max(10, Math.round(e.secs * cardScale))}s timed` : "# counted"}
+                        </button>
+                        <button onClick={(ev) => { ev.stopPropagation(); toggleUni(e); }}
+                          style={{ ...S.pill, padding: "7px 12px", fontSize: 12, background: effUni(e) ? "#DCE7FB" : "#EFF1F5", color: effUni(e) ? "#2456B3" : "#3D4756", outline: effUni(e) ? "1.5px solid #5B8DEF" : "none" }}>
+                          {effUni(e) ? "L/R both sides ✓" : "L/R both sides"}
+                        </button>
+                        <div style={{ flex: 1 }} />
+                        <button onClick={(ev) => { ev.stopPropagation(); rate(e.id, ratings[e.id] === 1 ? 0 : 1); }}
+                          title="Favorite — show this more often"
+                          style={{ border: "none", background: ratings[e.id] === 1 ? "#D8F3E5" : "#EFF1F5", outline: ratings[e.id] === 1 ? "2px solid #2FA671" : "none", borderRadius: 999, padding: "6px 12px", cursor: "pointer", fontSize: 15, lineHeight: 1 }}>
+                          👍
+                        </button>
+                        <button onClick={(ev) => { ev.stopPropagation(); banExercise(e.id); }}
+                          title="Swap it out — and show it less often"
+                          style={{ border: "none", background: "#FCE8E6", borderRadius: 999, padding: "6px 12px", cursor: "pointer", fontSize: 15, lineHeight: 1 }}>
+                          👎
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
