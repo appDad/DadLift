@@ -44,6 +44,8 @@ export function SummaryBody({ m }) {
     ["TOTAL REPS", m.totals.totalReps],
     ["TIMED WORK", Math.round(m.totals.totalSecs / 60) + "m"],
   ];
+  const wt = m.weight && m.weight.delta != null ? m.weight : null;
+  const wColor = !wt ? "#6C7686" : wt.delta < 0 ? "#2FA671" : wt.delta > 0 ? "#E8590C" : "#6C7686";
   return (
     <>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
@@ -54,6 +56,21 @@ export function SummaryBody({ m }) {
           </div>
         ))}
       </div>
+
+      {wt && (
+        <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 14, display: "flex", alignItems: "center", gap: 14 }}>
+          <span style={{ fontSize: 26 }}>⚖️</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 11, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, textTransform: "uppercase" }}>
+              Weight change
+            </div>
+            <div style={{ fontSize: 11, color: "#9AA3B0", marginTop: 2 }}>over {wt.n} weigh-ins</div>
+          </div>
+          <div style={{ fontFamily: DISPLAY, fontSize: 30, fontWeight: 700, color: wColor }}>
+            {wt.delta > 0 ? "+" : ""}{wt.delta} lb
+          </div>
+        </div>
+      )}
 
       <BarChart title="Workouts per week" weeks={m.weeks} counts={m.workoutsPerWeek} color="#46C98B" />
       <BarChart title="Exercises per week" weeks={m.weeks} counts={m.exercisesPerWeek} color="#5B8DEF" />

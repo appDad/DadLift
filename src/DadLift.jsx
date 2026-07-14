@@ -424,7 +424,8 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
 }
 
 /* ============ library screen ============ */
-function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, communityBy, onHide, ownedEquip, onSetEq, uniOf, onToggleUni, isAdmin, onToggleType }) {
+function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, communityBy, onHide, ownedEquip, ownedCount, onSetEq, uniOf, onToggleUni, isAdmin, onToggleType, cadenceOf, onSetCad, onAdminDelete }) {
+  const [openId, setOpenId] = useState(null);
   const [tab, setTab] = useState("browse"); // browse | add | export
   const [pasteVal, setPasteVal] = useState("");
   const [msg, setMsg] = useState(null);
@@ -493,6 +494,12 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, comm
 
       {tab === "browse" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 16px 20px" }}>
+          {ownedCount === 0 && (
+            <div style={{ background: "#FFF3E0", border: "1px solid #F2C98A", borderRadius: 12, padding: "12px 14px", fontSize: 13, color: "#8A5A16", lineHeight: 1.5 }}>
+              You haven't added any equipment yet, so only bodyweight moves get scheduled. Add gear
+              in Settings — <b>dumbbells</b> unlock the most — to see the full library in your workouts.
+            </div>
+          )}
           <button onClick={() => setGearOnly(!gearOnly)}
             style={{ ...S.pill, alignSelf: "flex-start", padding: "6px 12px", fontSize: 12, background: gearOnly ? "#1B2430" : "#E4E7EC", color: gearOnly ? "#F5F6F8" : "#3D4756" }}>
             {gearOnly ? "showing my gear only ✓" : "showing everything"}
@@ -509,55 +516,76 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, comm
               {shown.map((e) => {
                 const isCustom = custom.some((c) => c.id === e.id);
                 const commBy = !isCustom && communityBy[e.id];
+                const open = openId === e.id;
+                const eqLabel = e.eq ? (EQUIPMENT[e.eq] ? EQUIPMENT[e.eq].label : e.eq) : "bodyweight";
                 return (
-                  <div key={e.id} style={{ ...S.card, marginBottom: 6, display: "flex", alignItems: "center", gap: 10 }}>
-                    <Figure frames={resolveFrames(e)} color={GROUPS[g].color} size={44} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontFamily: DISPLAY, fontSize: 17, fontWeight: 600 }}>
-                        {e.name} {isCustom && <span style={{ fontSize: 10, color: "#6C7686", letterSpacing: 1 }}>CUSTOM</span>}
-                        {commBy && <span style={{ fontSize: 10, color: "#9B7EDE", letterSpacing: 1 }}>COMMUNITY · {String(commBy).split("@")[0]}</span>}
+                  <div key={e.id} onClick={() => setOpenId(open ? null : e.id)}
+                    style={{ ...S.card, marginBottom: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 48, height: 48, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: `${GROUPS[g].color}1A`, borderRadius: 10 }}>
+                        <Figure frames={resolveFrames(e)} color={GROUPS[g].color} size={44} />
                       </div>
-                      <div style={{ fontSize: 12, color: "#6C7686", display: "flex", alignItems: "center", gap: 4 }}>
-                        <button
-                          onClick={(ev) => { ev.stopPropagation(); onToggleType(e); }}
-                          title="Tap to switch between timed and counted"
-                          style={{ border: "none", borderRadius: 6, padding: "2px 8px", fontSize: 11, cursor: "pointer", background: "#EFF1F5", color: "#3D4756" }}>
-                          {e.type === "time" ? `⏱ ${e.secs}s timed` : "# counted"}
-                        </button>
-                        ·
-                        {isCustom ? (
-                          <select
-                            value={e.eq || ""}
-                            onClick={(ev) => ev.stopPropagation()}
-                            onChange={(ev) => onSetEq(e.id, ev.target.value || null)}
-                            style={{ border: "1px solid #DDE2E9", borderRadius: 6, background: "#EFF1F5", color: "#3D4756", fontSize: 11, padding: "2px 4px" }}>
-                            <option value="">bodyweight</option>
-                            {Object.keys(EQUIPMENT).map((k) => (
-                              <option key={k} value={k}>{EQUIPMENT[k].label}</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span>{e.eq ? (EQUIPMENT[e.eq] ? EQUIPMENT[e.eq].label : e.eq) : "bodyweight"}</span>
-                        )}
-                        <button
-                          onClick={(ev) => { ev.stopPropagation(); onToggleUni(e); }}
-                          title="Run this exercise twice — once per side/direction"
-                          style={{
-                            border: "none", borderRadius: 6, padding: "2px 8px", fontSize: 11, cursor: "pointer",
-                            background: uniOf(e) ? "#DCE7FB" : "#EFF1F5",
-                            color: uniOf(e) ? "#2456B3" : "#6C7686",
-                            outline: uniOf(e) ? "1.5px solid #5B8DEF" : "none",
-                          }}>
-                          {uniOf(e) ? "L/R both sides ✓" : "L/R both sides"}
-                        </button>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: DISPLAY, fontSize: 18, fontWeight: 600 }}>
+                          {e.name}
+                          {!isAdmin && isCustom && <span style={{ fontSize: 10, color: "#6C7686", letterSpacing: 1 }}> CUSTOM</span>}
+                          {!isAdmin && commBy && <span style={{ fontSize: 10, color: "#9B7EDE", letterSpacing: 1 }}> · {String(commBy).split("@")[0]}</span>}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 3, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 10, color: "#6C7686" }}>{e.type === "time" ? `${e.secs}s` : "reps"}</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, color: "#6C7686", background: "#EFF1F5", borderRadius: 5, padding: "2px 6px" }}>{eqLabel}</span>
+                          {uniOf(e) && <span style={{ fontSize: 9, fontWeight: 700, color: "#2456B3", background: "#DCE7FB", borderRadius: 5, padding: "2px 6px" }}>R/L</span>}
+                        </div>
                       </div>
+                      <span style={{
+                        width: 24, height: 24, borderRadius: 999, background: open ? GROUPS[g].color : "#EFF1F5",
+                        color: open ? "#FFFFFF" : "#6C7686", display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 15, fontWeight: 700, flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform .2s",
+                      }}>▾</span>
                     </div>
-                    <Thumbs value={ratings[e.id] || 0} onChange={(v) => onRate(e.id, v)} />
-                    {isCustom && (
-                      <button onClick={() => onRemove(e.id)} style={{ ...S.ghostBtn, color: "#E85D5D" }}>remove</button>
-                    )}
-                    {commBy && (
-                      <button onClick={() => onHide(e.id)} style={{ ...S.ghostBtn, color: "#E85D5D" }}>hide</button>
+                    {open && (
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #EFF1F5" }} onClick={(ev) => ev.stopPropagation()}>
+                        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                          <Figure frames={resolveFrames(e)} color={GROUPS[g].color} size={96} />
+                          <div style={{ fontSize: 13, lineHeight: 1.5, color: "#3D4756" }}>{e.cue}</div>
+                        </div>
+                        <div style={{ fontSize: 9, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700, margin: "12px 0 8px" }}>ADJUST THIS EXERCISE</div>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                          <button onClick={() => onToggleType(e)}
+                            style={{ ...S.pill, padding: "6px 10px", fontSize: 12, background: "#EFF1F5", color: "#3D4756" }}>
+                            {e.type === "time" ? `⏱ ${e.secs}s timed` : "# counted"}
+                          </button>
+                          <button onClick={() => onToggleUni(e)}
+                            style={{ ...S.pill, padding: "6px 10px", fontSize: 12, background: uniOf(e) ? "#DCE7FB" : "#EFF1F5", color: uniOf(e) ? "#2456B3" : "#3D4756", outline: uniOf(e) ? "1.5px solid #5B8DEF" : "none" }}>
+                            {uniOf(e) ? "R/L sides" : "no sides"}
+                          </button>
+                          {e.type === "reps" && (
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#EFF1F5", borderRadius: 999, padding: "3px 6px" }}>
+                              <button onClick={() => onSetCad(e.id, cadenceOf(e) + 0.5)} style={{ border: "none", background: "#FFFFFF", borderRadius: 999, width: 24, height: 24, cursor: "pointer", fontSize: 13 }}>−</button>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: "#3D4756", minWidth: 46, textAlign: "center" }}>{cadenceOf(e)}s/rep</span>
+                              <button onClick={() => onSetCad(e.id, cadenceOf(e) - 0.5)} style={{ border: "none", background: "#FFFFFF", borderRadius: 999, width: 24, height: 24, cursor: "pointer", fontSize: 13 }}>+</button>
+                            </div>
+                          )}
+                          {isCustom && (
+                            <select value={e.eq || ""} onChange={(ev) => onSetEq(e.id, ev.target.value || null)}
+                              style={{ border: "1px solid #DDE2E9", borderRadius: 8, background: "#EFF1F5", color: "#3D4756", fontSize: 12, padding: "6px 8px" }}>
+                              <option value="">bodyweight</option>
+                              {Object.keys(EQUIPMENT).map((k) => (<option key={k} value={k}>{EQUIPMENT[k].label}</option>))}
+                            </select>
+                          )}
+                          <div style={{ flex: 1 }} />
+                          <Thumbs value={ratings[e.id] || 0} onChange={(v) => onRate(e.id, v)} />
+                          {isAdmin && (isCustom || commBy) && (
+                            <button onClick={() => onAdminDelete(e.id)} style={{ ...S.ghostBtn, color: "#E85D5D", fontWeight: 700 }}>delete</button>
+                          )}
+                          {!isAdmin && isCustom && (
+                            <button onClick={() => onRemove(e.id)} style={{ ...S.ghostBtn, color: "#E85D5D" }}>remove</button>
+                          )}
+                          {!isAdmin && commBy && (
+                            <button onClick={() => onHide(e.id)} style={{ ...S.ghostBtn, color: "#E85D5D" }}>hide</button>
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
                 );
@@ -634,6 +662,10 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [doneExList, setDoneExList] = useState([]); // snapshot for the DONE screen — rating changes re-roll the picker
   const [ratings, setRatings] = useState({}); // exercise id -> 1 | 0 | -1
   const [uniOverride, setUniOverride] = useState({}); // exercise id -> true/false two-pass override
+  const [cadence, setCadence] = useState({}); // exercise id -> seconds per rep (personal)
+  const [weights, setWeights] = useState([]); // [{ d: ymd, w: pounds }]
+  const [shareWeight, setShareWeight] = useState(false); // include weight change on the public page
+  const [weighInput, setWeighInput] = useState("");
   const [community, setCommunity] = useState([]); // [{ex, by}] shared by other users
   const [hiddenComm, setHiddenComm] = useState([]); // community ids hidden from MY instance
   const [equip, setEquip] = useState({}); // equipment key -> false when I don't have it (default: have it)
@@ -802,6 +834,10 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       setHistory(await loadJSON("history", []));
       setRatings(await loadJSON("ratings", {}));
       setUniOverride(await loadJSON("unilateral", {}));
+      setCadence(await loadJSON("cadence", {}));
+      const wt = await loadJSON("weights", { list: [], share: false });
+      setWeights(wt.list || []);
+      setShareWeight(!!wt.share);
       setHiddenComm(await loadJSON("hiddencomm", []));
       setShare(await loadJSON("share", { id: null, on: false }));
       // merge admin catalog extensions BEFORE community loads — community
@@ -896,6 +932,17 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     saveJSON("ratings", next);
   };
 
+  /* per-exercise rep cadence (seconds per rep): my override, then the exercise's
+     own `cad` (from import), then the global tempo */
+  const cadenceOf = (e) => (e && cadence[e.id] != null ? cadence[e.id] : e && e.cad != null ? e.cad : tempo);
+  const setCad = (id, secs) => {
+    const v = Math.max(1, Math.min(6, +secs.toFixed(1)));
+    const next = { ...cadence, [id]: v };
+    if (Math.abs(v - tempo) < 0.001) delete next[id]; // matches default — drop it
+    setCadence(next);
+    saveJSON("cadence", next);
+  };
+
   /* two-pass (per-side) control. Precedence: my personal override, then the
      exercise's own `uni` property (set on customs, travels with community
      shares/exports), then auto-detection from the wording. */
@@ -982,7 +1029,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     setHistory([]);
     saveJSON("history", []);
     saveJSON("logins", []); // stale key from the old visit tracking
-    if (share.on && share.id) publishSnapshot(user.uid, firstName(), [], share.id);
+    if (share.on && share.id) publishSnapshot(user.uid, firstName(), [], share.id, weightExtra());
   };
 
   /* ----- today's-workout tweaks: reshuffle + thumb-out ----- */
@@ -1032,12 +1079,50 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
   /* ----- public progress page ----- */
   const firstName = () => (user.displayName || user.email || "someone").split(" ")[0].split("@")[0];
+
+  /* weigh-ins ------------------------------------------------------------ */
+  const weightsSorted = useMemo(() => [...weights].sort((a, b) => (a.d < b.d ? -1 : 1)), [weights]);
+  const lastWeigh = weightsSorted.length ? weightsSorted[weightsSorted.length - 1] : null;
+  const daysSinceWeigh = lastWeigh
+    ? Math.floor((new Date(ymd(today) + "T00:00:00") - new Date(lastWeigh.d + "T00:00:00")) / 86400000)
+    : Infinity;
+  const weighDue = weightsSorted.length === 0 || daysSinceWeigh >= 7;
+  // change relative to the very first weigh-in (public page shows only this delta, never the number)
+  const weightDelta = weightsSorted.length >= 2
+    ? +(lastWeigh.w - weightsSorted[0].w).toFixed(1)
+    : null;
+  const weightExtra = () =>
+    shareWeight && weightDelta != null
+      ? { weight: { delta: weightDelta, n: weightsSorted.length, to: lastWeigh.d } }
+      : {};
+  const saveWeights = (list, share_) => {
+    setWeights(list);
+    setShareWeight(share_);
+    saveJSON("weights", { list, share: share_ });
+    // keep the public page's weight line in sync with the latest entry / toggle
+    if (share.on && share.id) {
+      const sorted = [...list].sort((a, b) => (a.d < b.d ? -1 : 1));
+      const extra = share_ && sorted.length >= 2
+        ? { weight: { delta: +(sorted[sorted.length - 1].w - sorted[0].w).toFixed(1), n: sorted.length, to: sorted[sorted.length - 1].d } }
+        : { weight: null };
+      publishSnapshot(user.uid, firstName(), history, share.id, extra);
+    }
+  };
+  const addWeighIn = (lbs) => {
+    const w = Math.round(+lbs * 10) / 10;
+    if (!(w > 0)) return;
+    const d = ymd(today);
+    const list = [...weights.filter((x) => x.d !== d), { d, w }];
+    saveWeights(list, shareWeight);
+    setWeighInput("");
+  };
+
   const setSharing = (on) => {
     const id = share.id || newShareId();
     const next = { id, on };
     setShare(next);
     saveJSON("share", next);
-    if (on) publishSnapshot(user.uid, firstName(), history, id);
+    if (on) publishSnapshot(user.uid, firstName(), history, id, weightExtra());
     else removeSnapshot(id); // deleting the doc kills the link immediately
     return next;
   };
@@ -1068,6 +1153,16 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     const next = [...hiddenComm, id];
     setHiddenComm(next);
     saveJSON("hiddencomm", next);
+  };
+  /* admin: delete an exercise for EVERYONE (unpublish + drop from my custom) */
+  const adminDeleteExercise = (id) => {
+    unpublishExercise(id);
+    setCommunity((prev) => prev.filter((c) => c.ex.id !== id));
+    if (customEx.some((e) => e.id === id)) {
+      const next = customEx.filter((e) => e.id !== id);
+      setCustomEx(next);
+      saveJSON("customex", next);
+    }
   };
   const setCustomEq = (id, eq) => {
     const next = customEx.map((e) => (e.id === id ? { ...e, eq: eq || undefined } : e));
@@ -1225,7 +1320,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     const newHist = [...history.filter((h) => h.d !== entry.d), entry];
     setHistory(newHist);
     saveJSON("history", newHist);
-    if (share.on && share.id) publishSnapshot(user.uid, firstName(), newHist, share.id);
+    if (share.on && share.id) publishSnapshot(user.uid, firstName(), newHist, share.id, weightExtra());
     setLastEntry(entry);
     setDoneExList(exList);
     setQuickEx(null); // session over — home shows today's regular workout again
@@ -1293,6 +1388,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   useEffect(() => {
     if (screen !== "player" || paused || phase !== "work" || mode === "hiit" || !ex || ex.type !== "reps") return;
     const target = repTargetOf(ex);
+    const cad = cadenceOf(ex); // seconds per rep for THIS exercise
     const t = setInterval(() => {
       setRep((r) => {
         const next = r + 1;
@@ -1302,16 +1398,16 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         if (next === target) {
           clearInterval(t);
           // per-side sets run the count twice: left, then right
-          if (sideRef.current === "L") setTimeout(switchToRight, tempo * 500);
-          else setTimeout(advance, tempo * 500);
+          if (sideRef.current === "L") setTimeout(switchToRight, cad * 500);
+          else setTimeout(advance, cad * 500);
         }
         repRef.current = next;
         return next;
       });
-    }, tempo * 1000);
+    }, cad * 1000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, phase, idx, round, mode, paused, side, ex && ex.type]);
+  }, [screen, phase, idx, round, mode, paused, side, ex && ex.type, ex && cadenceOf(ex)]);
 
   const launch = (list) => {
     setRound(1); setIdx(0);
@@ -1346,9 +1442,10 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   if (screen === "library") {
     return <Library allEx={allEx} custom={customEx} onAdd={addCustom} onRemove={removeCustom}
       ratings={ratings} onRate={rate} communityBy={communityBy} onHide={hideCommunity}
-      ownedEquip={equipKeys.filter(haveEquip)} onSetEq={setCustomEq}
+      ownedEquip={equipKeys.filter(haveEquip)} ownedCount={owned.length} onSetEq={setCustomEq}
       uniOf={effUni} onToggleUni={toggleUni}
       isAdmin={isAdmin} onToggleType={toggleType}
+      cadenceOf={cadenceOf} onSetCad={setCad} onAdminDelete={adminDeleteExercise}
       onBack={() => setScreen("home")} />;
   }
   if (screen === "settings") {
@@ -1369,6 +1466,113 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   }
   if (screen === "users" && isAdmin) {
     return <Users onBack={() => setScreen("home")} />;
+  }
+
+  /* ---------- WEIGH-IN ---------- */
+  if (screen === "weigh") {
+    const pts = weightsSorted;
+    const firstDelta = pts.length >= 2 ? +(pts[pts.length - 1].w - pts[0].w).toFixed(1) : null;
+    const prevDelta = pts.length >= 2 ? +(pts[pts.length - 1].w - pts[pts.length - 2].w).toFixed(1) : null;
+    const deltaStr = (v) => (v > 0 ? `+${v}` : `${v}`);
+    const deltaColor = (v) => (v === 0 ? "#6C7686" : v < 0 ? "#2FA671" : "#E8590C");
+    // line chart geometry
+    const CW = 320, CH = 150, PADX = 10, PADY = 16;
+    let chart = null;
+    if (pts.length >= 2) {
+      const ws = pts.map((p) => p.w);
+      const lo = Math.min(...ws), hi = Math.max(...ws), span = hi - lo || 1;
+      const x = (i) => PADX + (i * (CW - 2 * PADX)) / (pts.length - 1);
+      const y = (w) => PADY + (CH - 2 * PADY) * (1 - (w - lo) / span);
+      const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.w).toFixed(1)}`).join(" ");
+      chart = { x, y, line, lo, hi };
+    }
+    return (
+      <div style={S.app}>
+        <style>{FONT_CSS}</style>
+        <div style={{ ...S.header, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={S.title}>WEIGH-IN</div>
+          <button onClick={() => setScreen("home")} style={{ ...S.pill, background: "#E4E7EC", color: "#3D4756" }}>done</button>
+        </div>
+
+        <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 16, boxShadow: "0 1px 3px rgba(27,36,48,0.06)" }}>
+            <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, marginBottom: 10 }}>
+              {weighDue ? "TODAY'S WEIGH-IN — DUE" : "LOG A NEW WEIGHT"}
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <input
+                type="number" inputMode="decimal" step="0.1" placeholder={lastWeigh ? String(lastWeigh.w) : "lbs"}
+                value={weighInput} onChange={(e) => setWeighInput(e.target.value)}
+                onFocus={(e) => e.target.select()}
+                style={{
+                  flex: 1, minWidth: 0, textAlign: "center", background: "#EFF1F5", color: "#1B2430",
+                  border: "1px solid #DDE2E9", borderRadius: 10, padding: "12px 8px",
+                  fontFamily: DISPLAY, fontSize: 26, fontWeight: 700,
+                }}
+              />
+              <span style={{ fontFamily: DISPLAY, fontSize: 18, fontWeight: 700, color: "#6C7686" }}>lb</span>
+              <button onClick={() => addWeighIn(weighInput)} disabled={!(+weighInput > 0)}
+                style={{ ...S.startBtn, width: "auto", padding: "12px 22px", opacity: +weighInput > 0 ? 1 : 0.4 }}>
+                SAVE
+              </button>
+            </div>
+            {lastWeigh && (
+              <div style={{ fontSize: 12, color: "#9AA3B0", marginTop: 8 }}>
+                Last: <b style={{ color: "#3D4756" }}>{lastWeigh.w} lb</b> on {lastWeigh.d}
+                {daysSinceWeigh > 0 && ` · ${daysSinceWeigh} day${daysSinceWeigh === 1 ? "" : "s"} ago`}
+              </div>
+            )}
+          </div>
+
+          {pts.length >= 2 ? (
+            <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "14px 12px 12px", boxShadow: "0 1px 3px rgba(27,36,48,0.06)" }}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 8, padding: "0 4px" }}>
+                {[["SINCE LAST", prevDelta], ["SINCE START", firstDelta]].map(([lbl, v]) => (
+                  <div key={lbl} style={{ flex: 1, textAlign: "center" }}>
+                    <div style={{ fontFamily: DISPLAY, fontSize: 24, fontWeight: 700, color: deltaColor(v) }}>{deltaStr(v)} lb</div>
+                    <div style={{ fontSize: 9, letterSpacing: 1.5, color: "#6C7686" }}>{lbl}</div>
+                  </div>
+                ))}
+              </div>
+              <svg viewBox={`0 0 ${CW} ${CH}`} width="100%" style={{ display: "block" }}>
+                <path d={chart.line} fill="none" stroke="#4F7DF0" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+                {pts.map((p, i) => (
+                  <circle key={i} cx={chart.x(i)} cy={chart.y(p.w)} r={i === pts.length - 1 ? 4 : 2.5}
+                    fill={i === pts.length - 1 ? "#E8433F" : "#4F7DF0"} />
+                ))}
+                <text x={PADX} y={12} fontSize={9} fill="#9AA3B0">{chart.hi} lb</text>
+                <text x={PADX} y={CH - 4} fontSize={9} fill="#9AA3B0">{chart.lo} lb</text>
+              </svg>
+            </div>
+          ) : (
+            <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 16, fontSize: 13, color: "#9AA3B0", textAlign: "center" }}>
+              Log at least two weigh-ins to see your trend graph.
+            </div>
+          )}
+
+          <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 16, boxShadow: "0 1px 3px rgba(27,36,48,0.06)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#1B2430" }}>Share weight change publicly</div>
+                <div style={{ fontSize: 12, color: "#6C7686", marginTop: 3, lineHeight: 1.4 }}>
+                  Shows only the <b>± change</b> (e.g. {firstDelta != null ? `${deltaStr(firstDelta)} lb` : "−6 lb"}) on your public page — never the actual number.
+                </div>
+              </div>
+              <button onClick={() => saveWeights(weights, !shareWeight)}
+                style={{
+                  flexShrink: 0, width: 52, height: 30, borderRadius: 999, border: "none", cursor: "pointer",
+                  background: shareWeight ? "#2FA671" : "#CBD2DC", position: "relative", transition: "background .15s",
+                }}>
+                <span style={{
+                  position: "absolute", top: 3, left: shareWeight ? 25 : 3, width: 24, height: 24, borderRadius: "50%",
+                  background: "#FFFFFF", transition: "left .15s", boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                }} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   /* ---------- SUMMARY (editable — honest numbers make honest charts) ---------- */
@@ -1447,6 +1651,10 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
             </div>
           </div>
           <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <button onClick={() => setScreen("weigh")}
+              style={{ ...S.pill, background: weighDue ? "#2FA671" : "#E4E7EC", color: weighDue ? "#FFFFFF" : "#3D4756" }}>
+              ⚖ weigh
+            </button>
             <button onClick={() => setScreen("stats")} style={{ ...S.pill, background: "#E4E7EC", color: "#3D4756" }}>
               stats
             </button>
@@ -1472,6 +1680,27 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
             </div>
           ))}
         </div>
+
+        {weighDue && (
+          <div onClick={() => setScreen("weigh")}
+            style={{
+              margin: "0 16px 14px", cursor: "pointer",
+              background: "linear-gradient(135deg, #2FA671 0%, #37B98A 100%)", color: "#FFFFFF",
+              borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12,
+              boxShadow: "0 4px 12px rgba(47,166,113,0.3)",
+            }}>
+            <span style={{ fontSize: 24 }}>⚖️</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: DISPLAY, fontSize: 18, fontWeight: 700, letterSpacing: 0.5 }}>
+                {weightsSorted.length === 0 ? "LOG YOUR FIRST WEIGH-IN" : "WEEKLY WEIGH-IN DUE"}
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.9 }}>
+                {weightsSorted.length === 0 ? "Track your progress week to week." : "It's been a week — tap to log today's weight."}
+              </div>
+            </div>
+            <span style={{ fontSize: 20, fontWeight: 700 }}>›</span>
+          </div>
+        )}
 
         <div style={{ display: "flex", gap: 8, padding: "0 16px 14px" }}>
           {[["full", "FULL WORKOUT", "linear-gradient(135deg, #4F7DF0 0%, #7B5BE6 100%)"], ["go", "🔥 BURN ON THE GO", "linear-gradient(135deg, #F1762A 0%, #E8433F 100%)"]].map(([k, label, grad]) => (
@@ -1513,11 +1742,16 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               +
             </button>
           </div>
-          <div style={{ fontSize: 10, color: "#9AA3B0", marginTop: 6 }}>
-            {owned.length === 0
-              ? "Bodyweight-only for now — tap + to tell us what equipment you own."
-              : `${availEx.length} of ${allEx.length} exercises fit today's gear. Manage what you own in settings.`}
-          </div>
+          {owned.length === 0 ? (
+            <div onClick={() => { setSettingsFocus("equip"); setScreen("settings"); }}
+              style={{ marginTop: 8, background: "#FFF3E0", border: "1px solid #F2C98A", borderRadius: 10, padding: "9px 12px", fontSize: 12, color: "#8A5A16", lineHeight: 1.45, cursor: "pointer" }}>
+              👉 Only bodyweight moves show up until you add gear. Tap here to add <b>dumbbells</b> and unlock the full library.
+            </div>
+          ) : (
+            <div style={{ fontSize: 10, color: "#9AA3B0", marginTop: 6 }}>
+              {availEx.length} of {allEx.length} exercises fit today's gear. Manage what you own in settings.
+            </div>
+          )}
         </div>
         )}
 
@@ -1608,7 +1842,12 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                         <span style={{ fontSize: 9, letterSpacing: 0.5, fontWeight: 700, color: "#2456B3", background: "#DCE7FB", borderRadius: 5, padding: "2px 6px" }}>L/R</span>
                       )}
                       {ratings[e.id] === 1 && <span style={{ fontSize: 11 }}>👍</span>}
-                      <span style={{ fontSize: 14, color: "#9AA3B0", transition: "transform .2s", transform: open ? "rotate(180deg)" : "none", display: "inline-block" }}>▾</span>
+                      <span style={{
+                        width: 26, height: 26, borderRadius: 999, background: open ? g.color : "#EFF1F5",
+                        color: open ? "#FFFFFF" : "#6C7686", display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 16, fontWeight: 700, transition: "transform .2s, background .2s",
+                        transform: open ? "rotate(180deg)" : "none",
+                      }}>▾</span>
                     </div>
                   </div>
                 </div>
@@ -1627,8 +1866,15 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                         </button>
                         <button onClick={(ev) => { ev.stopPropagation(); toggleUni(e); }}
                           style={{ ...S.pill, padding: "7px 12px", fontSize: 12, background: effUni(e) ? "#DCE7FB" : "#EFF1F5", color: effUni(e) ? "#2456B3" : "#3D4756", outline: effUni(e) ? "1.5px solid #5B8DEF" : "none" }}>
-                          {effUni(e) ? "L/R both sides ✓" : "L/R both sides"}
+                          {effUni(e) ? "R/L sides" : "no sides"}
                         </button>
+                        {e.type === "reps" && (
+                          <div onClick={(ev) => ev.stopPropagation()} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#EFF1F5", borderRadius: 999, padding: "3px 6px" }}>
+                            <button onClick={() => setCad(e.id, cadenceOf(e) + 0.5)} style={{ border: "none", background: "#FFFFFF", borderRadius: 999, width: 24, height: 24, cursor: "pointer", fontSize: 13, lineHeight: 1 }}>−</button>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: "#3D4756", minWidth: 46, textAlign: "center" }}>{cadenceOf(e)}s/rep</span>
+                            <button onClick={() => setCad(e.id, cadenceOf(e) - 0.5)} style={{ border: "none", background: "#FFFFFF", borderRadius: 999, width: 24, height: 24, cursor: "pointer", fontSize: 13, lineHeight: 1 }}>+</button>
+                          </div>
+                        )}
                         <div style={{ flex: 1 }} />
                         <button onClick={(ev) => { ev.stopPropagation(); rate(e.id, ratings[e.id] === 1 ? 0 : 1); }}
                           title="Favorite — show this more often"
@@ -1835,6 +2081,23 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           style={{ ...S.startBtn, background: paused ? "#2FA671" : "#E4E7EC", color: paused ? "#FFFFFF" : "#1B2430" }}>
           {paused ? "▶ RESUME" : "❚❚ PAUSE"}
         </button>
+        {!isRest && !isReady && mode !== "hiit" && ex.type === "reps" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button onClick={() => setCad(ex.id, cadenceOf(ex) + 0.5)}
+              title="Slow the count down for this exercise"
+              style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: "#EFF1F5", color: "#6C7686" }}>
+              🐢 SLOWER
+            </button>
+            <div style={{ fontFamily: DISPLAY, fontSize: 15, fontWeight: 700, color: "#6C7686", minWidth: 58, textAlign: "center" }}>
+              {cadenceOf(ex)}s/rep
+            </div>
+            <button onClick={() => setCad(ex.id, cadenceOf(ex) - 0.5)}
+              title="Speed the count up for this exercise"
+              style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: "#EFF1F5", color: "#6C7686" }}>
+              🐇 FASTER
+            </button>
+          </div>
+        )}
         {!isRest && mode !== "hiit" && (
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={togglePlayerUni}
@@ -1843,7 +2106,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                 background: effUni(ex) ? "#DCE7FB" : "#EFF1F5",
                 color: effUni(ex) ? "#2456B3" : "#6C7686",
               }}>
-              {effUni(ex) ? "L/R BOTH SIDES ✓" : "L/R BOTH SIDES"}
+              {effUni(ex) ? "R/L SIDES" : "NO SIDES"}
             </button>
             <button onClick={togglePlayerType}
               title="Tap to switch this exercise between timed and counted"

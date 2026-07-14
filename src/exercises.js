@@ -454,12 +454,13 @@ const ADD_PROMPT_BASE = `Generate a JSON array of exercises for my workout app. 
 [{
   "id": "short_unique_id",
   "name": "Exercise Name",
-  "grp": "back" | "chest" | "shoulders" | "arms" | "core",
+  "grp": "back" | "chest" | "shoulders" | "arms" | "core" | "legs",
   "type": "reps" | "time",
   "secs": 40,                    // only if type is "time"
   "eq": "db",                    // equipment needed — allowed values ONLY: __EQKEYS__. OMIT the field entirely if bodyweight-only. Never invent other values.
-  "fam": "pushup",               // optional movement family so similar moves don't cluster — e.g. pushup, plank, curl, row, press, raise, tricep, squat, lunge, crunch, hinge, chestpress, glute, backext. Omit if none fits.
+  "fam": "pushup",               // optional movement family so similar moves don't cluster — e.g. pushup, plank, curl, row, press, raise, tricep, squat, lunge, crunch, hinge, chestpress, glute, backext, quadruped. Omit if none fits.
   "uni": true,                   // optional — set true if the exercise works one side/arm/leg/direction at a time (NOT alternating); the app then runs the set twice, once per side
+  "cad": 3,                      // optional seconds-per-rep for counted moves (1–6). Slower (4–5) for heavy/controlled lifts, faster (1.5–2) for explosive or high-rep moves like crunches. Omit for the default 3.
   "cue": "One or two sentences of plain-language form instruction.",
   "frames": [FRAME_A, FRAME_B]   // start and end position stick figures
 }]
@@ -502,6 +503,7 @@ export function validateExercise(e) {
   if (e.eq != null && !EQUIPMENT[e.eq]) errs.push(`unknown equipment "${e.eq}" — allowed: ${Object.keys(EQUIPMENT).join(", ")} (or omit for bodyweight)`);
   if (e.uni != null && typeof e.uni !== "boolean") errs.push("uni must be true/false or omitted");
   if (e.fam != null && typeof e.fam !== "string") errs.push("fam must be a string or omitted");
+  if (e.cad != null && !(e.cad >= 1 && e.cad <= 6)) errs.push("cad must be 1–6 seconds or omitted");
   if (!e.cue) errs.push("missing cue");
   const frames = e.frames || POSES[e.pose];
   if (!Array.isArray(frames) || frames.length !== 2) errs.push("needs frames[2] (or a valid pose key)");

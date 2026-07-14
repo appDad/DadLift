@@ -16,8 +16,8 @@ export function newShareId() {
 
 export const shareUrl = (id) => `${window.location.origin}/s/${id}`;
 
-export function publishSnapshot(uid, name, history, shareId) {
-  const payload = { name, updated: Date.now(), ...computeSummary(history) };
+export function publishSnapshot(uid, name, history, shareId, extra = {}) {
+  const payload = { name, updated: Date.now(), ...computeSummary(history), ...extra };
   return setDoc(doc(db, "shares", shareId), {
     uid,
     value: JSON.stringify(payload),
