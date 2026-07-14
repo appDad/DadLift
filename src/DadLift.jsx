@@ -543,7 +543,13 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, comm
                         {commBy && <span style={{ fontSize: 10, color: "#9B7EDE", letterSpacing: 1 }}>COMMUNITY · {String(commBy).split("@")[0]}</span>}
                       </div>
                       <div style={{ fontSize: 12, color: "#6C7686", display: "flex", alignItems: "center", gap: 4 }}>
-                        {e.type === "time" ? `${e.secs}s hold/work` : "rep-counted"} ·
+                        <button
+                          onClick={(ev) => { ev.stopPropagation(); onToggleType(e); }}
+                          title="Tap to switch between timed and counted"
+                          style={{ border: "none", borderRadius: 6, padding: "2px 8px", fontSize: 11, cursor: "pointer", background: "#EFF1F5", color: "#3D4756" }}>
+                          {e.type === "time" ? `⏱ ${e.secs}s timed` : "🔢 counted"}
+                        </button>
+                        ·
                         {isCustom ? (
                           <select
                             value={e.eq || ""}
@@ -569,14 +575,6 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, comm
                           }}>
                           {uniOf(e) ? "per-side ✓" : "per-side"}
                         </button>
-                        {isAdmin && (
-                          <button
-                            onClick={(ev) => { ev.stopPropagation(); onToggleType(e); }}
-                            title="Admin: switch this exercise between timed and rep-counted for everyone"
-                            style={{ border: "none", borderRadius: 6, padding: "2px 8px", fontSize: 11, cursor: "pointer", background: "#F4E9D8", color: "#8A6D2F", outline: "1.5px solid #E0B44A" }}>
-                            → {e.type === "time" ? "make reps" : "make timed"}
-                          </button>
-                        )}
                       </div>
                     </div>
                     <Thumbs value={ratings[e.id] || 0} onChange={(v) => onRate(e.id, v)} />
@@ -667,7 +665,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [community, setCommunity] = useState([]); // [{ex, by}] shared by other users
   const [hiddenComm, setHiddenComm] = useState([]); // community ids hidden from MY instance
   const [equip, setEquip] = useState({}); // equipment key -> false when I don't have it (default: have it)
-  const [owned, setOwned] = useState(DEFAULT_EQUIP); // equipment you actually own (settings-managed)
+  const [owned, setOwned] = useState([]); // equipment you actually own — fresh users start bodyweight-only
   const [share, setShare] = useState({ id: null, on: false }); // public progress page
   const [shareCopied, setShareCopied] = useState(false);
   const [settingsFocus, setSettingsFocus] = useState(null); // "equip" scrolls settings to that section
@@ -678,6 +676,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [fullEffort, setFullEffort] = useState("steady"); // easy | steady | hard
   const [extEquip, setExtEquip] = useState({}); // admin-added catalog entries (config/equipment)
   const [exOverrides, setExOverrides] = useState({}); // admin exercise property overrides (config/exercises)
+  const [typeOver, setTypeOver] = useState({}); // personal counted/timed flips (non-admin users)
   const [shuffleN, setShuffleN] = useState(0); // today's reshuffle count — new seed each press
   const [excluded, setExcluded] = useState([]); // exercises thumbed out of TODAY'S workout
   const savedRef = useRef(false);
@@ -701,13 +700,18 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       const g = inferEquip(e);
       return g ? { ...e, eq: g } : e;
     };
-    // admin overrides win last, so type/secs/fam/uni edits apply for everyone
+    // admin overrides apply for everyone; a user's personal counted/timed
+    // flip layers on top for their own instance
     const applyOverride = (e) => {
-      const o = exOverrides[e.id];
-      return o ? { ...e, ...o } : e;
+      const a = exOverrides[e.id];
+      const p = typeOver[e.id];
+      let out = e;
+      if (a) out = { ...out, ...a };
+      if (p) out = { ...out, ...p };
+      return out;
     };
     return [...BUILTIN, ...comm.map(tagEq), ...customEx.map(tagEq)].map(applyOverride);
-  }, [customEx, community, hiddenComm, extEquip, exOverrides]);
+  }, [customEx, community, hiddenComm, extEquip, exOverrides, typeOver]);
   const communityBy = useMemo(
     () => Object.fromEntries(community.map((c) => [c.ex.id, c.by])),
     [community]
@@ -814,6 +818,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       // exercises tagged with admin-added gear must pass validation
       setExtEquip(await loadEquipExtensions());
       setExOverrides(await loadExOverrides());
+      setTypeOver(await loadJSON("typeover", {}));
       // per-day workout tweaks: reshuffle count + thumbed-out exercises
       const tweaks = await loadJSON("daytweaks", null);
       if (tweaks && tweaks.d === ymd(today)) {
@@ -949,23 +954,38 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     }
   };
 
-  /* admin: flip an exercise between timed and rep-counted for all users
-     (e.g. an alternating plank that should be counted, not held). The hold
-     length is preserved so flipping back restores the original seconds. */
+  /* flip an exercise between timed and rep-counted. Tapping shows what it IS
+     and swaps it. Admin flips apply globally (validator role); everyone else
+     gets a personal flip that layers over the shared definition. The original
+     hold length is preserved so flipping back restores it. */
   const toggleType = (exObj) => {
-    if (!isAdmin) return;
-    const orig = BUILTIN.find((b) => b.id === exObj.id);
-    if (exObj.type === "time") {
-      // -> reps; keep secs on the object so a flip-back restores it
-      const patch = { type: "reps" };
-      if (orig && orig.type === "reps") { const n = { ...exOverrides }; delete n[exObj.id]; setExOverrides(n); saveExOverrides(n); return; }
-      setAdminOverride(exObj.id, patch);
-    } else {
-      // an originally-timed exercise restores its built-in hold; an originally-
-      // rep exercise keeps whatever hold was last set (default 40)
-      const secs = orig && orig.type === "time" ? orig.secs : (exObj.secs || 40);
-      if (orig && orig.type === "time" && orig.secs === secs) { const n = { ...exOverrides }; delete n[exObj.id]; setExOverrides(n); saveExOverrides(n); return; }
-      setAdminOverride(exObj.id, { type: "time", secs });
+    if (isAdmin) {
+      const orig = BUILTIN.find((b) => b.id === exObj.id);
+      if (exObj.type === "time") {
+        if (orig && orig.type === "reps") { const n = { ...exOverrides }; delete n[exObj.id]; setExOverrides(n); saveExOverrides(n); return; }
+        setAdminOverride(exObj.id, { type: "reps" });
+      } else {
+        const secs = orig && orig.type === "time" ? orig.secs : (exObj.secs || 40);
+        if (orig && orig.type === "time" && orig.secs === secs) { const n = { ...exOverrides }; delete n[exObj.id]; setExOverrides(n); saveExOverrides(n); return; }
+        setAdminOverride(exObj.id, { type: "time", secs });
+      }
+      return;
+    }
+    // personal: one flip stored, tap again to return to the shared definition
+    const cur = { ...typeOver };
+    if (cur[exObj.id]) delete cur[exObj.id];
+    else if (exObj.type === "time") cur[exObj.id] = { type: "reps" };
+    else cur[exObj.id] = { type: "time", secs: exObj.secs || 40 };
+    setTypeOver(cur);
+    saveJSON("typeover", cur);
+  };
+
+  /* same flip from inside the player — restarts the running set cleanly */
+  const togglePlayerType = () => {
+    toggleType(ex);
+    if (phase === "work") {
+      setRep(0); repRef.current = 0;
+      timeLeftRef.current = 0; setTimeLeft(0); // timed init refills; rep counter restarts
     }
   };
 
@@ -1579,7 +1599,9 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
             </button>
           </div>
           <div style={{ fontSize: 10, color: "#9AA3B0", marginTop: 6 }}>
-            {availEx.length} of {allEx.length} exercises fit today's gear. Manage what you own in settings.
+            {owned.length === 0
+              ? "Bodyweight-only for now — tap + to tell us what equipment you own."
+              : `${availEx.length} of ${allEx.length} exercises fit today's gear. Manage what you own in settings.`}
           </div>
         </div>
         )}
@@ -1619,6 +1641,15 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                       )}
                     </div>
                     <div style={{ display: "flex", gap: 4 }}>
+                      <button
+                        onClick={(ev) => { ev.stopPropagation(); toggleType(e); }}
+                        title="Tap to switch between timed and counted"
+                        style={{
+                          border: "none", borderRadius: 8, padding: "2px 8px", cursor: "pointer",
+                          fontSize: 12, lineHeight: 1.5, background: "#EFF1F5", color: "#6C7686",
+                        }}>
+                        {e.type === "time" ? "⏱" : "🔢"}
+                      </button>
                       <button
                         onClick={(ev) => { ev.stopPropagation(); toggleUni(e); }}
                         title="Both sides — run the set twice, once per side/direction"
@@ -1862,14 +1893,21 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           {paused ? "▶ RESUME" : "❚❚ PAUSE"}
         </button>
         {!isRest && mode !== "hiit" && (
-          <button onClick={togglePlayerUni}
-            style={{
-              ...S.startBtn, fontSize: 16, padding: "12px 0",
-              background: effUni(ex) ? "#DCE7FB" : "#EFF1F5",
-              color: effUni(ex) ? "#2456B3" : "#6C7686",
-            }}>
-            {effUni(ex) ? "×2 BOTH SIDES ✓" : "×2 BOTH SIDES — OFF"}
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={togglePlayerUni}
+              style={{
+                ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0",
+                background: effUni(ex) ? "#DCE7FB" : "#EFF1F5",
+                color: effUni(ex) ? "#2456B3" : "#6C7686",
+              }}>
+              {effUni(ex) ? "×2 BOTH SIDES ✓" : "×2 BOTH SIDES"}
+            </button>
+            <button onClick={togglePlayerType}
+              title="Tap to switch this exercise between timed and counted"
+              style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: "#EFF1F5", color: "#6C7686" }}>
+              {ex.type === "time" ? `⏱ TIMED ${secsOf(ex)}s` : "🔢 COUNTED"}
+            </button>
+          </div>
         )}
         {!isRest && !isReady && mode !== "hiit" && ex.type === "reps" && (
           <button onClick={() => (side === "L" ? switchToRight() : advance())} style={S.startBtn}>
