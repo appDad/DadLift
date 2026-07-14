@@ -1652,33 +1652,34 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     return (
       <div style={S.app}>
         <style>{FONT_CSS}</style>
-        <div style={{ ...S.header, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <img src="/icons/dadlift-icon-192.png" alt="" width={56} height={56} style={{ borderRadius: "50%", flexShrink: 0 }} />
-            <div>
-              <div style={S.eyebrow}>{dateStr}</div>
-              <div style={S.title}>DADLIFT</div>
-              <div style={S.sub}>
-                {allEx.length} in library · {mode === "hiit" ? `HIIT ${hiit[0]}s on / ${hiit[1]}s off` : `reps today: ${workout.reps} · ${tempo}s/rep`}
-              </div>
-            </div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 6, width: 172, flexShrink: 0 }}>
-            {[
-              ["weigh", "weigh", weighDue],
-              ["stats", "stats", false],
-              ["library", "library", false],
-              ...(isAdmin ? [["users", "users", false]] : []),
-            ].map(([scr, label, hot]) => (
-              <button key={scr} onClick={() => setScreen(scr)}
-                style={{ ...S.pill, width: "100%", textAlign: "center", background: hot ? "#2FA671" : "#E4E7EC", color: hot ? "#FFFFFF" : "#3D4756" }}>
-                {label}
-              </button>
-            ))}
-            <button onClick={() => setScreen("settings")}
-              style={{ ...S.pill, width: "100%", textAlign: "center", gridColumn: isAdmin ? "1 / -1" : "auto", background: "#E4E7EC", color: "#3D4756" }}>
-              {isAdmin ? "⚙ settings" : "⚙"}
+        <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "14px 16px 2px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+          {[
+            ["weigh", "WEIGH", weighDue],
+            ["stats", "STATS", false],
+            ["library", "LIBRARY", false],
+            ["settings", "SETTINGS", false],
+          ].map(([scr, label, hot]) => (
+            <button key={scr} onClick={() => setScreen(scr)}
+              style={{
+                flexShrink: 0, border: "none", borderRadius: 999, cursor: "pointer",
+                padding: "9px 20px", fontFamily: DISPLAY, fontSize: 15, fontWeight: 700, letterSpacing: 1,
+                background: hot ? "#2FA671" : "#FFFFFF",
+                color: hot ? "#FFFFFF" : "#3D4756",
+                boxShadow: hot ? "0 3px 10px rgba(47,166,113,0.4)" : "0 1px 3px rgba(27,36,48,0.08)",
+              }}>
+              {label}
             </button>
+          ))}
+        </div>
+
+        <div style={{ ...S.header, padding: "14px 20px 14px", display: "flex", alignItems: "center", gap: 12 }}>
+          <img src="/icons/dadlift-icon-192.png" alt="" width={56} height={56} style={{ borderRadius: "50%", flexShrink: 0 }} />
+          <div>
+            <div style={S.eyebrow}>{dateStr}</div>
+            <div style={S.title}>DADLIFT</div>
+            <div style={S.sub}>
+              {allEx.length} in library · {mode === "hiit" ? `HIIT ${hiit[0]}s on / ${hiit[1]}s off` : `reps today: ${workout.reps} · ${tempo}s/rep`}
+            </div>
           </div>
         </div>
 
@@ -1765,7 +1766,11 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         )}
 
         {homeTab === "full" && (
-          <div style={{ position: "relative", marginBottom: 14 }}>
+          <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, padding: "0 16px 8px" }}>
+            TODAY'S FOCUS — TAP A MUSCLE GROUP
+          </div>
+          <div style={{ position: "relative" }}>
             <div ref={focusRowRef}
               style={{ display: "flex", gap: 8, overflowX: "auto", padding: "0 16px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
               {["balanced", ...Object.keys(GROUPS)].map((gk) => {
@@ -1806,20 +1811,17 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               )
             ))}
           </div>
+          </div>
         )}
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px 8px" }}>
-          <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700 }}>
-            {homeTab === "go" ? "BURN ON THE GO — NO EQUIPMENT · 1 ROUND"
-              : emphasis === "balanced" ? "TODAY'S WORKOUT" : `${GROUPS[emphasis].label.toUpperCase()} FOCUS`}
+        <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "12px 14px", margin: "0 16px 14px", boxShadow: "0 1px 3px rgba(27,36,48,0.06)", display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ flex: 1, fontSize: 12, color: "#6C7686", lineHeight: 1.45 }}>
+            Same day = same workout — reshuffle for a new draw. 👍 shows a move more, 👎 swaps it out. Tap a card for form.
           </div>
           <button onClick={reshuffle}
-            style={{ ...S.pill, padding: "8px 16px", fontSize: 13, fontWeight: 700, background: "linear-gradient(135deg, #5B8DEF, #7B5BE6)", color: "#FFFFFF", boxShadow: "0 3px 8px rgba(91,141,239,0.35)" }}>
+            style={{ ...S.pill, flexShrink: 0, padding: "10px 16px", fontSize: 13, fontWeight: 700, background: "linear-gradient(135deg, #5B8DEF, #7B5BE6)", color: "#FFFFFF", boxShadow: "0 3px 8px rgba(91,141,239,0.35)" }}>
             ⟳ RESHUFFLE
           </button>
-        </div>
-        <div style={{ fontSize: 12, color: "#9AA3B0", lineHeight: 1.5, padding: "0 16px 10px" }}>
-          Same day = same workout — ⟳ RESHUFFLE for a new draw. 👍 shows an exercise more, 👎 swaps it out. Tap a card for form.
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px" }}>
           {homeList.map((e) => {
@@ -1951,6 +1953,15 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
             START WORKOUT — ~{fullEst} MIN · {workout.exercises.length} × {rounds}
           </button>
         </div>
+        )}
+
+        {isAdmin && (
+          <div style={{ textAlign: "center", padding: "22px 16px 28px" }}>
+            <button onClick={() => setScreen("users")}
+              style={{ ...S.ghostBtn, fontSize: 13, textDecoration: "underline", color: "#9AA3B0" }}>
+              Manage users
+            </button>
+          </div>
         )}
       </div>
     );
