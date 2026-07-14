@@ -124,6 +124,42 @@ function adaptTarget(exId, base, history) {
   return Math.max(6, Math.min(25, base + adj));
 }
 
+/* ============ home setup-card controls ============ */
+function Seg({ options, value, onChange }) {
+  return (
+    <div style={{ display: "flex", background: "#EFF1F5", borderRadius: 10, padding: 3, gap: 3, flex: 1, maxWidth: 250 }}>
+      {options.map(([k, l]) => (
+        <button key={k} onClick={() => onChange(k)}
+          style={{
+            flex: 1, border: "none", borderRadius: 8, padding: "8px 0", fontSize: 13, fontWeight: 600, cursor: "pointer",
+            background: value === k ? "#1B2430" : "transparent",
+            color: value === k ? "#F5F6F8" : "#3D4756",
+          }}>
+          {l}
+        </button>
+      ))}
+    </div>
+  );
+}
+function MiniStep({ value, unit = "", min, max, step, onChange }) {
+  const b = { border: "none", borderRadius: 10, width: 38, height: 38, fontSize: 20, fontWeight: 700, background: "#EFF1F5", color: "#1B2430", cursor: "pointer", lineHeight: 1 };
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <button style={b} onClick={() => onChange(Math.max(min, value - step))}>−</button>
+      <div style={{ fontFamily: DISPLAY, fontSize: 22, fontWeight: 700, minWidth: 52, textAlign: "center" }}>{value}{unit}</div>
+      <button style={b} onClick={() => onChange(Math.min(max, value + step))}>+</button>
+    </div>
+  );
+}
+function SetupRow({ label, last, children }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "11px 0", borderBottom: last ? "none" : "1px solid #EFF1F5" }}>
+      <div style={{ fontSize: 11, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, flexShrink: 0 }}>{label}</div>
+      {children}
+    </div>
+  );
+}
+
 /* ============ thumbs rating control ============ */
 function Thumbs({ value, onChange, size = 15 }) {
   return (
@@ -272,7 +308,7 @@ function Stepper({ label, value, unit, min, max, step, onChange }) {
   );
 }
 
-function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, micOn, setMicOn, readySecs, setReadySecs, customEquip, onAddEquip, onRemoveEquip, focusEquip, isAdmin, extEquip, onAddCatalog, onRemoveCatalog, onClearHistory, onBack, userEmail, onSignOut }) {
+function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, micOn, setMicOn, readySecs, setReadySecs, owned, onToggleOwned, focusEquip, isAdmin, extEquip, onAddCatalog, onRemoveCatalog, onClearHistory, onBack, userEmail, onSignOut }) {
   const S = styles;
   const [armClear, setArmClear] = useState(false); // two-tap confirm for the destructive bit
   const [catLabel, setCatLabel] = useState("");
@@ -282,7 +318,6 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
   useEffect(() => {
     if (focusEquip && equipRef.current) equipRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [focusEquip]);
-  const addable = Object.keys(EQUIPMENT).filter((k) => !DEFAULT_EQUIP.includes(k) && !customEquip.includes(k));
   return (
     <div style={S.app}>
       <style>{FONT_CSS}</style>
@@ -314,39 +349,28 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
             {voiceOn ? "ON" : "OFF"}
           </button>
         </div>
-        <div style={S.settingsLabel} ref={equipRef}>EQUIPMENT</div>
+        <div style={S.settingsLabel} ref={equipRef}>WHAT EQUIPMENT DO YOU OWN?</div>
         <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ fontSize: 13, color: "#6C7686", lineHeight: 1.4 }}>
-            Dumbbells and med ball are built in. Tap gear you own to add it — it's a fixed
-            list so community exercises never end up tagged with misspelled equipment.
-            Toggle what's on hand for today from the home screen.
+            Tap everything you own. Only owned gear appears on the home screen,
+            where you can switch it on or off for the day. Bodyweight is always in.
           </div>
-          {customEquip.length > 0 && (
-            <div>
-              <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, marginBottom: 6 }}>YOUR GEAR</div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {customEquip.map((k) => (
-                  <span key={k} style={{ ...S.pill, padding: "6px 10px", fontSize: 12, background: "#1B2430", color: "#F5F6F8", display: "inline-flex", alignItems: "center", gap: 8 }}>
-                    {EQUIPMENT[k] ? EQUIPMENT[k].label : k}
-                    <button onClick={() => onRemoveEquip(k)} style={{ border: "none", background: "none", color: "#E85D5D", cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {addable.length > 0 && (
-            <div>
-              <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, marginBottom: 6 }}>TAP TO ADD</div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {addable.map((k) => (
-                  <button key={k} onClick={() => onAddEquip(k)}
-                    style={{ ...S.pill, padding: "6px 10px", fontSize: 12, background: "#EFF1F5", color: "#3D4756", border: "1px dashed #DDE2E9" }}>
-                    + {EQUIPMENT[k].label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {Object.keys(EQUIPMENT).map((k) => {
+              const has = owned.includes(k);
+              return (
+                <button key={k} onClick={() => onToggleOwned(k)}
+                  style={{
+                    ...S.pill, padding: "8px 12px", fontSize: 13,
+                    background: has ? "#1B2430" : "#EFF1F5",
+                    color: has ? "#F5F6F8" : "#6C7686",
+                    border: has ? "none" : "1px dashed #DDE2E9",
+                  }}>
+                  {has ? "✓ " : "+ "}{EQUIPMENT[k].label}
+                </button>
+              );
+            })}
+          </div>
         </div>
         {isAdmin && (
           <>
@@ -637,14 +661,13 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [doneExList, setDoneExList] = useState([]); // snapshot for the DONE screen — rating changes re-roll the picker
   const [micOn, setMicOn] = useState(true);
   const [heard, setHeard] = useState(null); // last spoken rep count picked up by the mic
-  const [manualReps, setManualReps] = useState(""); // typed fallback when the mic mishears
   const [relisten, setRelisten] = useState(false); // re-record tapped — show the listening hint
   const [ratings, setRatings] = useState({}); // exercise id -> 1 | 0 | -1
   const [uniOverride, setUniOverride] = useState({}); // exercise id -> true/false two-pass override
   const [community, setCommunity] = useState([]); // [{ex, by}] shared by other users
   const [hiddenComm, setHiddenComm] = useState([]); // community ids hidden from MY instance
   const [equip, setEquip] = useState({}); // equipment key -> false when I don't have it (default: have it)
-  const [customEquip, setCustomEquip] = useState([]); // user-added equipment names
+  const [owned, setOwned] = useState(DEFAULT_EQUIP); // equipment you actually own (settings-managed)
   const [share, setShare] = useState({ id: null, on: false }); // public progress page
   const [shareCopied, setShareCopied] = useState(false);
   const [settingsFocus, setSettingsFocus] = useState(null); // "equip" scrolls settings to that section
@@ -692,11 +715,9 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   /* equipment shown as chips: the two defaults, gear you added, and anything
      a library exercise requires (all canonical catalog keys) */
   const equipKeys = useMemo(() => {
-    const keys = [...DEFAULT_EQUIP, ...customEquip.filter((k) => !DEFAULT_EQUIP.includes(k))];
-    for (const e of allEx) if (e.eq && !keys.includes(e.eq)) keys.push(e.eq);
-    return keys;
-  }, [allEx, customEquip]);
-  const haveEquip = (key) => equip[key] !== false; // unknown gear defaults to available
+    return owned.slice(); // home shows ONLY what you own — toggle on/off per day
+  }, [owned]);
+  const haveEquip = (key) => owned.includes(key) && equip[key] !== false; // not owned = never available
   /* only build workouts from exercises whose equipment is on hand */
   const availEx = useMemo(() => allEx.filter((e) => !e.eq || haveEquip(e.eq)), [allEx, equip]);
 
@@ -844,15 +865,16 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         setFullEffort(s.fullEffort ?? "steady");
         setEquip(s.equip ?? {});
         // normalize any legacy free-text equipment into catalog keys
-        setCustomEquip([...new Set((s.customEquip ?? []).map(normalizeEquip).filter(Boolean))]);
+        // ownership list; migrate legacy customEquip additions into it
+        setOwned(s.owned ?? [...new Set([...DEFAULT_EQUIP, ...((s.customEquip ?? []).map(normalizeEquip).filter(Boolean))])]);
       }
       setLoaded(true);
     })();
   }, []);
   useEffect(() => {
     if (!loaded) return;
-    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn, readySecs, goMins, goEffort, fullMins, fullEffort, equip, customEquip }, { debounce: 600 });
-  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn, readySecs, goMins, goEffort, fullMins, fullEffort, equip, customEquip]);
+    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned }, { debounce: 600 });
+  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, micOn, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned]);
 
   /* screen wake lock while working out — counting used to die when the phone locked */
   useEffect(() => {
@@ -986,7 +1008,17 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     if (EQUIPMENT[key] && EQUIPMENT[key].custom) delete EQUIPMENT[key];
     setExtEquip(next);
     saveEquipExtensions(next);
-    setCustomEquip(customEquip.filter((k) => k !== key));
+    setOwned(owned.filter((k) => k !== key));
+  };
+
+  /* own / un-own a piece of gear (settings) */
+  const toggleOwned = (key) => {
+    if (owned.includes(key)) {
+      setOwned(owned.filter((k) => k !== key));
+      if (equip[key] != null) { const ne = { ...equip }; delete ne[key]; setEquip(ne); }
+    } else {
+      setOwned([...owned, key]);
+    }
   };
 
   /* ----- public progress page ----- */
@@ -1079,15 +1111,14 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     }, 7000);
   };
 
-  /* typed rep entry during rest — the fallback when speech doesn't register */
+  /* tap-adjust rep entry during rest — the fallback when speech doesn't register */
   const applyManualReps = (n) => {
-    stopListening(); // no point letting the mic overwrite a typed number
+    stopListening(); // no point letting the mic overwrite a manual number
     const slotIndex = sessionLogRef.current.length - 1;
     const slot = sessionLogRef.current[slotIndex];
     if (slot) slot.value = n;
     setSummaryRows((prev) => (prev.length > slotIndex ? prev.map((r, i) => (i === slotIndex ? { ...r, value: n } : r)) : prev));
     setHeard(n); // reuse the "logged ✓" confirmation
-    setManualReps("");
   };
 
   /* reopen the mic for another attempt at the rep count */
@@ -1162,7 +1193,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
     const goRest = (announceText, secs) => {
       setPhase("rest"); setTimeLeft(secs);
-      setManualReps(""); setRelisten(false);
+      setRelisten(false);
       if (askReps) {
         setHeard(null);
         say("How many reps?");
@@ -1351,7 +1382,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const launch = (list) => {
     setRound(1); setIdx(0);
     savedRef.current = false; setCoachLine(null); setLastEntry(null);
-    stopListening(); setHeard(null); setPaused(false); setManualReps(""); setRelisten(false);
+    stopListening(); setHeard(null); setPaused(false); setRelisten(false);
     sessionLogRef.current = [];
     beginSet(list[0]);
     setScreen("player");
@@ -1391,12 +1422,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       roundRest={roundRest} setRoundRest={setRoundRest} hiit={hiit} setHiit={setHiit}
       voiceOn={voiceOn} setVoiceOn={setVoiceOn} micOn={micOn} setMicOn={setMicOn}
       readySecs={readySecs} setReadySecs={setReadySecs}
-      customEquip={customEquip}
-      onAddEquip={(key) => { if (EQUIPMENT[key] && !customEquip.includes(key) && !DEFAULT_EQUIP.includes(key)) setCustomEquip([...customEquip, key]); }}
-      onRemoveEquip={(key) => {
-        setCustomEquip(customEquip.filter((k) => k !== key));
-        const nextEquip = { ...equip }; delete nextEquip[key]; setEquip(nextEquip);
-      }}
+      owned={owned} onToggleOwned={toggleOwned}
       focusEquip={settingsFocus === "equip"}
       isAdmin={isAdmin} extEquip={extEquip} onAddCatalog={addCatalogEquip} onRemoveCatalog={removeCatalogEquip}
       onClearHistory={clearHistory} onBack={() => { setSettingsFocus(null); setScreen("home"); }}
@@ -1553,7 +1579,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
             </button>
           </div>
           <div style={{ fontSize: 10, color: "#9AA3B0", marginTop: 6 }}>
-            {availEx.length} of {allEx.length} exercises fit today's gear. Add new equipment in settings.
+            {availEx.length} of {allEx.length} exercises fit today's gear. Manage what you own in settings.
           </div>
         </div>
         )}
@@ -1633,88 +1659,57 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
         {homeTab === "go" ? (
         <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ fontSize: 10, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>TIME</span>
-            {[5, 10, 15, 20].map((m) => (
-              <button key={m} onClick={() => setGoMins(m)}
-                style={{ ...S.pill, padding: "6px 14px", fontSize: 13, fontWeight: 700, background: goMins === m ? "#5B8DEF" : "#E4E7EC", color: goMins === m ? "#FFFFFF" : "#3D4756" }}>
-                {m}m
-              </button>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ fontSize: 10, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>EFFORT</span>
-            {[["easy", "😌 easy"], ["steady", "💪 steady"], ["hard", "🔥 hard"]].map(([k, label]) => (
-              <button key={k} onClick={() => setGoEffort(k)}
-                style={{ ...S.pill, padding: "6px 14px", fontSize: 13, background: goEffort === k ? "#1B2430" : "#E4E7EC", color: goEffort === k ? "#F5F6F8" : "#3D4756" }}>
-                {label}
-              </button>
-            ))}
+          <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "4px 16px" }}>
+            <SetupRow label="TIME">
+              <MiniStep value={goMins} unit="m" min={5} max={30} step={5} onChange={setGoMins} />
+            </SetupRow>
+            <SetupRow label="EFFORT" last>
+              <Seg options={[["easy", "😌 easy"], ["steady", "💪 steady"], ["hard", "🔥 hard"]]} value={goEffort} onChange={setGoEffort} />
+            </SetupRow>
           </div>
           <button onClick={startAnywhere} style={S.startBtn}>
             🔥 START BURN — ~{goPlan.estMins} MIN · {anywhereWorkout.length} MOVES
           </button>
-          <div style={{ textAlign: "center", fontSize: 12, color: "#9AA3B0" }}>
-            Bodyweight only, single round, sized to your time. Easy −30% / hard +30% reps and holds.
-            Counts toward your streak — equipment and settings stay untouched.
+          <div style={{ textAlign: "center", fontSize: 12, color: "#9AA3B0", lineHeight: 1.5 }}>
+            Bodyweight only, single round, sized to your time. Counts toward your streak —
+            your gear and settings stay untouched.
           </div>
         </div>
         ) : (
         <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ fontSize: 10, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>FOCUS</span>
-            {["balanced", ...Object.keys(GROUPS)].map((g) => (
-              <button key={g} onClick={() => setEmphasis(g)}
+          <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "4px 16px" }}>
+            <SetupRow label="FOCUS">
+              <select
+                value={emphasis}
+                onChange={(ev) => setEmphasis(ev.target.value)}
                 style={{
-                  ...S.pill, padding: "6px 12px", fontSize: 12,
-                  background: emphasis === g ? (GROUPS[g] ? GROUPS[g].color : "#1B2430") : "#E4E7EC",
-                  color: emphasis === g ? (GROUPS[g] ? "#1B2430" : "#F5F6F8") : "#3D4756",
+                  border: "1px solid #DDE2E9", borderRadius: 10, background: "#EFF1F5", color: "#1B2430",
+                  fontSize: 14, fontWeight: 600, padding: "9px 12px", minWidth: 150,
                 }}>
-                {GROUPS[g] ? GROUPS[g].label.toLowerCase() : "balanced"}
-              </button>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ fontSize: 10, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>MODE</span>
-            {["circuit", "hiit"].map((m) => (
-              <button key={m} onClick={() => setMode(m)}
-                style={{ ...S.pill, background: mode === m ? "#1B2430" : "#E4E7EC", color: mode === m ? "#F5F6F8" : "#3D4756", textTransform: "uppercase", letterSpacing: 1 }}>
-                {m}
-              </button>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ fontSize: 10, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>ROUNDS</span>
-            {[1, 2, 3].map((r) => (
-              <button key={r} onClick={() => setRounds(r)}
-                style={{ ...S.pill, background: rounds === r ? "#5B8DEF" : "#E4E7EC", color: rounds === r ? "#FFFFFF" : "#3D4756", fontWeight: 700 }}>
-                {r}
-              </button>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ fontSize: 10, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>TIME</span>
-            {[10, 20, 30, 45].map((m) => (
-              <button key={m} onClick={() => setFullMins(m)}
-                style={{ ...S.pill, padding: "6px 14px", fontSize: 13, fontWeight: 700, background: fullMins === m ? "#5B8DEF" : "#E4E7EC", color: fullMins === m ? "#FFFFFF" : "#3D4756" }}>
-                {m}m
-              </button>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ fontSize: 10, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>EFFORT</span>
-            {[["easy", "😌 easy"], ["steady", "💪 steady"], ["hard", "🔥 hard"]].map(([k, label]) => (
-              <button key={k} onClick={() => setFullEffort(k)}
-                style={{ ...S.pill, padding: "6px 14px", fontSize: 13, background: fullEffort === k ? "#1B2430" : "#E4E7EC", color: fullEffort === k ? "#F5F6F8" : "#3D4756" }}>
-                {label}
-              </button>
-            ))}
+                <option value="balanced">⚖️ balanced</option>
+                {Object.keys(GROUPS).map((g) => (
+                  <option key={g} value={g}>{GROUPS[g].label.toLowerCase()}</option>
+                ))}
+              </select>
+            </SetupRow>
+            <SetupRow label="MODE">
+              <Seg options={[["circuit", "CIRCUIT"], ["hiit", "HIIT"]]} value={mode} onChange={setMode} />
+            </SetupRow>
+            <SetupRow label="ROUNDS">
+              <MiniStep value={rounds} min={1} max={3} step={1} onChange={setRounds} />
+            </SetupRow>
+            <SetupRow label="TIME">
+              <MiniStep value={fullMins} unit="m" min={10} max={60} step={5} onChange={setFullMins} />
+            </SetupRow>
+            <SetupRow label="EFFORT" last>
+              <Seg options={[["easy", "😌 easy"], ["steady", "💪 steady"], ["hard", "🔥 hard"]]} value={fullEffort} onChange={setFullEffort} />
+            </SetupRow>
           </div>
           <button onClick={start} style={S.startBtn}>
             START WORKOUT — ~{fullEst} MIN · {workout.exercises.length} × {rounds}
           </button>
-          <div style={{ textAlign: "center", fontSize: 12, color: "#9AA3B0" }}>
-            Same day = same workout — tap ⟳ RESHUFFLE for a new draw. 👍 favorites an exercise (shows more), 👎 swaps it out (shows less). Tap a card for form.
+          <div style={{ textAlign: "center", fontSize: 12, color: "#9AA3B0", lineHeight: 1.5 }}>
+            Same day = same workout — ⟳ RESHUFFLE for a new draw. 👍 shows an exercise more, 👎 swaps it out. Tap a card for form.
           </div>
         </div>
         )}
@@ -1804,28 +1799,24 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                 {heard != null ? `Got ${heard} reps — logged ✓` : "🎤 Say how many reps you got"}
               </div>
             )}
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input
-                type="number" min={0} max={999}
-                value={manualReps}
-                placeholder={String(lastRec.value || 0)}
-                onChange={(ev) => setManualReps(ev.target.value)}
-                onKeyDown={(ev) => { if (ev.key === "Enter" && manualReps !== "") applyManualReps(Math.max(0, Math.min(999, Math.round(+manualReps) || 0))); }}
-                style={{
-                  width: 74, textAlign: "center", background: "#FFFFFF", color: "#1B2430",
-                  border: "1px solid #DDE2E9", borderRadius: 10, padding: "8px 4px",
-                  fontFamily: DISPLAY, fontSize: 18, fontWeight: 700,
-                }}
-              />
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <button
-                onClick={() => { if (manualReps !== "") applyManualReps(Math.max(0, Math.min(999, Math.round(+manualReps) || 0))); }}
-                style={{ ...S.pill, background: "#1B2430", color: "#F5F6F8", fontSize: 12 }}>
-                SET REPS
+                onClick={() => applyManualReps(Math.max(0, (lastRec.value || 0) - 1))}
+                style={{ border: "none", borderRadius: 10, width: 42, height: 42, fontSize: 22, fontWeight: 700, background: "#E4E7EC", color: "#1B2430", cursor: "pointer", lineHeight: 1 }}>
+                −
+              </button>
+              <div style={{ fontFamily: DISPLAY, fontSize: 30, fontWeight: 700, minWidth: 56, textAlign: "center" }}>
+                {lastRec.value || 0}
+              </div>
+              <button
+                onClick={() => applyManualReps(Math.min(999, (lastRec.value || 0) + 1))}
+                style={{ border: "none", borderRadius: 10, width: 42, height: 42, fontSize: 22, fontWeight: 700, background: "#E4E7EC", color: "#1B2430", cursor: "pointer", lineHeight: 1 }}>
+                +
               </button>
               <button
                 onClick={rerecord}
                 title="Open the mic again and say the number"
-                style={{ ...S.pill, background: "#E4E7EC", color: "#3D4756", fontSize: 12 }}>
+                style={{ ...S.pill, background: "#E4E7EC", color: "#3D4756", fontSize: 12, marginLeft: 6 }}>
                 🎤 SAY IT
               </button>
             </div>
