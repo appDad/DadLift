@@ -12,12 +12,16 @@ export function calcStreak(history) {
   return streak;
 }
 
-/* week bucket = the Monday that starts that week */
+/* week bucket = the Sunday that starts that week (US convention) */
 export function mondayOf(dateStr) {
   const d = new Date(dateStr + "T00:00:00");
-  const day = (d.getDay() + 6) % 7; // Mon=0 … Sun=6
-  d.setDate(d.getDate() - day);
+  d.setDate(d.getDate() - d.getDay()); // getDay(): Sun=0 … Sat=6 -> back to Sunday
   return ymd(d);
+}
+/* workouts logged in the current calendar week (Sunday-started) */
+export function thisWeekCount(history) {
+  const wk = mondayOf(ymd(new Date()));
+  return history.filter((h) => mondayOf(h.d) === wk).length;
 }
 export function lastWeeks(n) {
   const weeks = [];

@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { loadJSON, saveJSON } from "./storage";
 import { coachModel } from "./firebase";
-import { POSES, GROUPS, BUILTIN, EQUIPMENT, DEFAULT_EQUIP, normalizeEquip, inferEquip, extendEquipment, equipSlug, buildAddPrompt, validateExercise, resolveFrames } from "./exercises";
+import { POSES, GROUPS, BUILTIN, EQUIPMENT, DEFAULT_EQUIP, normalizeEquip, inferEquip, famOf, extendEquipment, equipSlug, buildAddPrompt, validateExercise, resolveFrames } from "./exercises";
+import { loadExOverrides, saveExOverrides } from "./exoverrides";
 import { loadEquipExtensions, saveEquipExtensions } from "./catalog";
 import { loadCommunity, publishExercise, unpublishExercise } from "./community";
-import { ymd, calcStreak } from "./summary";
+import { ymd, calcStreak, thisWeekCount } from "./summary";
 import { newShareId, shareUrl, publishSnapshot, removeSnapshot } from "./share";
 import { styles, DISPLAY, FONT_CSS } from "./theme";
 import Stats from "./Stats.jsx";
@@ -41,25 +42,34 @@ const autoUnilateral = (e) => {
 };
 
 /* ============ daily workout builder ============ */
-/* thumbs bias the deterministic picker: 👍 3x weight, 👎 0.4x, neutral 1x */
-function weightedPick(pool, count, rng, ratings) {
+/* thumbs bias the deterministic picker: 👍 3x weight, 👎 0.4x, neutral 1x.
+   usedFams (optional Set) makes it avoid a family already in the workout. */
+function weightedPick(pool, count, rng, ratings, usedFams) {
   const out = [];
   const items = pool.slice();
   while (out.length < count && items.length) {
+    // prefer candidates whose movement family isn't used yet this workout
+    let idxMap = items.map((_, i) => i);
+    if (usedFams) {
+      const fresh = idxMap.filter((i) => !usedFams.has(famOf(items[i])));
+      if (fresh.length) idxMap = fresh;
+    }
     let total = 0;
-    const w = items.map((e) => {
-      const r = ratings[e.id] || 0;
+    const w = idxMap.map((i) => {
+      const r = ratings[items[i].id] || 0;
       const wt = r > 0 ? 3 : r < 0 ? 0.4 : 1;
       total += wt;
       return wt;
     });
     let roll = rng() * total;
-    let pick = items.length - 1;
-    for (let i = 0; i < items.length; i++) {
-      roll -= w[i];
-      if (roll <= 0) { pick = i; break; }
+    let sel = idxMap.length - 1;
+    for (let k = 0; k < idxMap.length; k++) {
+      roll -= w[k];
+      if (roll <= 0) { sel = k; break; }
     }
-    out.push(items.splice(pick, 1)[0]);
+    const chosen = items.splice(idxMap[sel], 1)[0];
+    if (usedFams) usedFams.add(famOf(chosen));
+    out.push(chosen);
   }
   return out;
 }
@@ -85,9 +95,10 @@ function buildWorkout(date, allEx, emphasis, ratings = {}, nonce = 0, slots = 8)
     for (let i = 0; rem > 0; i++, rem--) counts[order[i % order.length]]++;
   }
   const picks = [];
+  const usedFams = new Set(); // spread movement families across the whole workout
   for (const g of groups) {
     const pool = allEx.filter((e) => e.grp === g);
-    picks.push(...weightedPick(pool, counts[g], rng, ratings));
+    picks.push(...weightedPick(pool, counts[g], rng, ratings, usedFams));
   }
   const reps = [10, 12, 15][Math.floor(rng() * 3)];
   return { exercises: picks, reps };
@@ -414,7 +425,7 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
 }
 
 /* ============ library screen ============ */
-function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, communityBy, onHide, ownedEquip, onSetEq, uniOf, onToggleUni }) {
+function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, communityBy, onHide, ownedEquip, onSetEq, uniOf, onToggleUni, isAdmin, onToggleType }) {
   const [tab, setTab] = useState("browse"); // browse | add | export
   const [pasteVal, setPasteVal] = useState("");
   const [msg, setMsg] = useState(null);
@@ -534,6 +545,14 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, comm
                           }}>
                           {uniOf(e) ? "per-side ✓" : "per-side"}
                         </button>
+                        {isAdmin && (
+                          <button
+                            onClick={(ev) => { ev.stopPropagation(); onToggleType(e); }}
+                            title="Admin: switch this exercise between timed and rep-counted for everyone"
+                            style={{ border: "none", borderRadius: 6, padding: "2px 8px", fontSize: 11, cursor: "pointer", background: "#F4E9D8", color: "#8A6D2F", outline: "1.5px solid #E0B44A" }}>
+                            → {e.type === "time" ? "make reps" : "make timed"}
+                          </button>
+                        )}
                       </div>
                     </div>
                     <Thumbs value={ratings[e.id] || 0} onChange={(v) => onRate(e.id, v)} />
@@ -635,6 +654,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [fullMins, setFullMins] = useState(20); // full-workout time budget
   const [fullEffort, setFullEffort] = useState("steady"); // easy | steady | hard
   const [extEquip, setExtEquip] = useState({}); // admin-added catalog entries (config/equipment)
+  const [exOverrides, setExOverrides] = useState({}); // admin exercise property overrides (config/exercises)
   const [shuffleN, setShuffleN] = useState(0); // today's reshuffle count — new seed each press
   const [excluded, setExcluded] = useState([]); // exercises thumbed out of TODAY'S workout
   const savedRef = useRef(false);
@@ -643,6 +663,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const repRef = useRef(0);
   const timeLeftRef = useRef(0);
   const sideRef = useRef(null);
+  const advancingRef = useRef(false); // guards the deferred phase transition
   const sessionLogRef = useRef([]);
 
   const allEx = useMemo(() => {
@@ -657,8 +678,13 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       const g = inferEquip(e);
       return g ? { ...e, eq: g } : e;
     };
-    return [...BUILTIN, ...comm.map(tagEq), ...customEx.map(tagEq)];
-  }, [customEx, community, hiddenComm, extEquip]);
+    // admin overrides win last, so type/secs/fam/uni edits apply for everyone
+    const applyOverride = (e) => {
+      const o = exOverrides[e.id];
+      return o ? { ...e, ...o } : e;
+    };
+    return [...BUILTIN, ...comm.map(tagEq), ...customEx.map(tagEq)].map(applyOverride);
+  }, [customEx, community, hiddenComm, extEquip, exOverrides]);
   const communityBy = useMemo(
     () => Object.fromEntries(community.map((c) => [c.ex.id, c.by])),
     [community]
@@ -719,23 +745,25 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       const j = Math.floor(rng() * (i + 1));
       [groups[i], groups[j]] = [groups[j], groups[i]];
     }
-    const queues = groups.map((g) => weightedPick(pool.filter((e) => e.grp === g), 3, rng, ratings));
+    const queues = groups.map((g) => weightedPick(pool.filter((e) => e.grp === g), 6, rng, ratings));
     const budget = goMins * 60;
     const picks = [];
-    let used = 0, gi = 0, guard = 0;
-    while (guard++ < 60 && picks.length < 15) {
-      const q = queues[gi % queues.length];
-      gi++;
-      if (!q.length) {
-        if (queues.every((qq) => !qq.length)) break;
-        continue;
+    const pickedFams = new Set(); // hard cap: each movement family appears at most once
+    let used = 0, progress = true;
+    while (progress && picks.length < 15 && used < budget) {
+      progress = false;
+      for (const q of queues) {
+        const ci = q.findIndex((e) => !pickedFams.has(famOf(e)));
+        if (ci === -1) continue; // this group has nothing with a fresh family
+        const e = q.splice(ci, 1)[0];
+        const cost = est(e);
+        if (picks.length >= 3 && used + cost > budget) { progress = false; break; }
+        picks.push(e);
+        pickedFams.add(famOf(e));
+        used += cost;
+        progress = true;
+        if (used >= budget) break;
       }
-      const e = q.shift();
-      const cost = est(e);
-      if (picks.length >= 3 && used + cost > budget) break; // 3-move floor, then respect the clock
-      picks.push(e);
-      used += cost;
-      if (used >= budget) break;
     }
     return { picks, estMins: Math.max(1, Math.round(used / 60)) };
   }, [today, allEx, excluded, ratings, shuffleN, goMins, goEffort, mode, hiit, tempo, readySecs, restSecs, workout.reps, uniOverride, customEx]);
@@ -764,6 +792,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       // merge admin catalog extensions BEFORE community loads — community
       // exercises tagged with admin-added gear must pass validation
       setExtEquip(await loadEquipExtensions());
+      setExOverrides(await loadExOverrides());
       // per-day workout tweaks: reshuffle count + thumbed-out exercises
       const tweaks = await loadJSON("daytweaks", null);
       if (tweaks && tweaks.d === ymd(today)) {
@@ -860,6 +889,18 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     if (e.uni != null) return e.uni;
     return autoUnilateral(e);
   };
+  /* merge a patch into the admin global exercise-override doc */
+  const setAdminOverride = (id, patch) => {
+    const cur = exOverrides[id] || {};
+    const merged = { ...cur, ...patch };
+    const next = { ...exOverrides, [id]: merged };
+    setExOverrides(next);
+    saveExOverrides(next);
+    if (uniOverride[id] != null && "uni" in patch) { // global wins — drop my personal one
+      const o = { ...uniOverride }; delete o[id]; setUniOverride(o); saveJSON("unilateral", o);
+    }
+  };
+
   const toggleUni = (exObj) => {
     const next = !effUni(exObj);
     if (customEx.some((c) => c.id === exObj.id)) {
@@ -873,13 +914,36 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         const o = { ...uniOverride }; delete o[exObj.id]; // property is the source of truth now
         setUniOverride(o); saveJSON("unilateral", o);
       }
+    } else if (isAdmin) {
+      // admin editing a built-in / community exercise — make it global for everyone
+      setAdminOverride(exObj.id, { uni: next });
     } else {
-      // built-in or someone else's community exercise — personal preference
+      // regular user — personal preference only
       const o = { ...uniOverride, [exObj.id]: next };
       const dflt = exObj.uni != null ? exObj.uni : autoUnilateral(exObj);
       if (o[exObj.id] === dflt) delete o[exObj.id]; // matches default — drop the override
       setUniOverride(o);
       saveJSON("unilateral", o);
+    }
+  };
+
+  /* admin: flip an exercise between timed and rep-counted for all users
+     (e.g. an alternating plank that should be counted, not held). The hold
+     length is preserved so flipping back restores the original seconds. */
+  const toggleType = (exObj) => {
+    if (!isAdmin) return;
+    const orig = BUILTIN.find((b) => b.id === exObj.id);
+    if (exObj.type === "time") {
+      // -> reps; keep secs on the object so a flip-back restores it
+      const patch = { type: "reps" };
+      if (orig && orig.type === "reps") { const n = { ...exOverrides }; delete n[exObj.id]; setExOverrides(n); saveExOverrides(n); return; }
+      setAdminOverride(exObj.id, patch);
+    } else {
+      // an originally-timed exercise restores its built-in hold; an originally-
+      // rep exercise keeps whatever hold was last set (default 40)
+      const secs = orig && orig.type === "time" ? orig.secs : (exObj.secs || 40);
+      if (orig && orig.type === "time" && orig.secs === secs) { const n = { ...exOverrides }; delete n[exObj.id]; setExOverrides(n); saveExOverrides(n); return; }
+      setAdminOverride(exObj.id, { type: "time", secs });
     }
   };
 
@@ -1059,6 +1123,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   /* enter a work slot: circuit gets a GET SET countdown first; HIIT flows straight in */
   const setSideBoth = (v) => { sideRef.current = v; setSide(v); };
   const beginSet = (exObj) => {
+    advancingRef.current = false;
     setRep(0); repRef.current = 0;
     // two-pass applies to reps AND timed sets in circuit (HIIT stays interval-based)
     setSideBoth(mode !== "hiit" && effUni(exObj) ? "L" : null);
@@ -1216,7 +1281,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     }
     // halfway switch call: only when a set is NOT running as two-pass —
     // circuit timed sets whose cue says halfway, and any HIIT unilateral set
-    const workTotal = mode === "hiit" ? hiit[0] : (ex && ex.secs) || 0;
+    const workTotal = mode === "hiit" ? hiit[0] : (ex && ex.type === "time" ? secsOf(ex) : 0);
     const halfSwitch = phase === "work" && ex && !sideRef.current && (
       mode === "hiit" ? effUni(ex) : (ex.type === "time" && /halfway|do both sides/i.test(ex.cue || ""))
     );
@@ -1235,11 +1300,15 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               : "Go.");
             return 0;
           }
-          if (phase === "work") {
-            // two-pass timed set: first side done -> switch, second side -> advance
-            if (sideRef.current === "L") switchToRight(); else advance();
-          } else {
-            startNext();
+          // defer the transition out of this state-updater: calling advance/
+          // startNext here would set the rest countdown, but our `return 0`
+          // below would clobber it and the rest would be skipped
+          if (!advancingRef.current) {
+            advancingRef.current = true;
+            const fn = phase === "work"
+              ? (sideRef.current === "L" ? switchToRight : advance)
+              : startNext;
+            setTimeout(() => { advancingRef.current = false; fn(); }, 0);
           }
           return 0;
         }
@@ -1307,13 +1376,14 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const S = styles;
   const dateStr = today.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
   const streak = calcStreak(history);
-  const week = history.filter((h) => (new Date() - new Date(h.d)) / 86400000 < 7).length;
+  const week = thisWeekCount(history); // current Sunday-started calendar week
 
   if (screen === "library") {
     return <Library allEx={allEx} custom={customEx} onAdd={addCustom} onRemove={removeCustom}
       ratings={ratings} onRate={rate} communityBy={communityBy} onHide={hideCommunity}
       ownedEquip={equipKeys.filter(haveEquip)} onSetEq={setCustomEq}
       uniOf={effUni} onToggleUni={toggleUni}
+      isAdmin={isAdmin} onToggleType={toggleType}
       onBack={() => setScreen("home")} />;
   }
   if (screen === "settings") {
