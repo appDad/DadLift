@@ -845,7 +845,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       // merge admin catalog extensions BEFORE community loads — community
       // exercises tagged with admin-added gear must pass validation
       setExtEquip(await loadEquipExtensions());
-      setExOverrides(await loadExOverrides());
+      const ov = await loadExOverrides();
+      setExOverrides(ov);
       setTypeOver(await loadJSON("typeover", {}));
       // per-day workout tweaks: reshuffle count + thumbed-out exercises
       const tweaks = await loadJSON("daytweaks", null);
@@ -882,6 +883,14 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           fixed.forEach((c, i) => {
             if (c.ex.eq && !comm[i].ex.eq) publishExercise(c.ex, c.by); // keeps original contributor
           });
+          // one-shot: drop overrides pointing at exercises that no longer exist
+          // anywhere (e.g. a deleted built-in), now that every source is loaded
+          const known = new Set([...BUILTIN, ...taggedCustom, ...fixed.map((c) => c.ex)].map((e) => e.id));
+          const pruned = Object.fromEntries(Object.entries(ov).filter(([id]) => known.has(id)));
+          if (Object.keys(pruned).length !== Object.keys(ov).length) {
+            setExOverrides(pruned);
+            saveExOverrides(pruned);
+          }
         }
       });
       const s = await loadJSON("settings", null);
@@ -1654,24 +1663,21 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               </div>
             </div>
           </div>
-          <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <button onClick={() => setScreen("weigh")}
-              style={{ ...S.pill, background: weighDue ? "#2FA671" : "#E4E7EC", color: weighDue ? "#FFFFFF" : "#3D4756" }}>
-              weigh
-            </button>
-            <button onClick={() => setScreen("stats")} style={{ ...S.pill, background: "#E4E7EC", color: "#3D4756" }}>
-              stats
-            </button>
-            <button onClick={() => setScreen("library")} style={{ ...S.pill, background: "#E4E7EC", color: "#3D4756" }}>
-              library
-            </button>
-            {isAdmin && (
-              <button onClick={() => setScreen("users")} style={{ ...S.pill, background: "#E4E7EC", color: "#3D4756" }}>
-                users
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 6, width: 172, flexShrink: 0 }}>
+            {[
+              ["weigh", "weigh", weighDue],
+              ["stats", "stats", false],
+              ["library", "library", false],
+              ...(isAdmin ? [["users", "users", false]] : []),
+            ].map(([scr, label, hot]) => (
+              <button key={scr} onClick={() => setScreen(scr)}
+                style={{ ...S.pill, width: "100%", textAlign: "center", background: hot ? "#2FA671" : "#E4E7EC", color: hot ? "#FFFFFF" : "#3D4756" }}>
+                {label}
               </button>
-            )}
-            <button onClick={() => setScreen("settings")} style={{ ...S.pill, background: "#E4E7EC", color: "#3D4756" }}>
-              ⚙
+            ))}
+            <button onClick={() => setScreen("settings")}
+              style={{ ...S.pill, width: "100%", textAlign: "center", gridColumn: isAdmin ? "1 / -1" : "auto", background: "#E4E7EC", color: "#3D4756" }}>
+              {isAdmin ? "⚙ settings" : "⚙"}
             </button>
           </div>
         </div>
@@ -1812,6 +1818,9 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
             ⟳ RESHUFFLE
           </button>
         </div>
+        <div style={{ fontSize: 12, color: "#9AA3B0", lineHeight: 1.5, padding: "0 16px 10px" }}>
+          Same day = same workout — ⟳ RESHUFFLE for a new draw. 👍 shows an exercise more, 👎 swaps it out. Tap a card for form.
+        </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px" }}>
           {homeList.map((e) => {
             const g = GROUPS[e.grp];
@@ -1941,9 +1950,6 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           <button onClick={start} style={S.startBtn}>
             START WORKOUT — ~{fullEst} MIN · {workout.exercises.length} × {rounds}
           </button>
-          <div style={{ textAlign: "center", fontSize: 12, color: "#9AA3B0", lineHeight: 1.5 }}>
-            Same day = same workout — ⟳ RESHUFFLE for a new draw. 👍 shows an exercise more, 👎 swaps it out. Tap a card for form.
-          </div>
         </div>
         )}
       </div>
