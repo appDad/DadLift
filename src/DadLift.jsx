@@ -1801,15 +1801,6 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           </div>
         )}
 
-        <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "12px 14px", margin: "0 16px 14px", boxShadow: "0 1px 3px rgba(27,36,48,0.06)", display: "flex", alignItems: "center", gap: 12 }}>
-          <button onClick={reshuffle}
-            style={{ ...S.pill, flexShrink: 0, padding: "10px 16px", fontSize: 13, fontWeight: 700, background: "linear-gradient(135deg, #5B8DEF, #7B5BE6)", color: "#FFFFFF", boxShadow: "0 3px 8px rgba(91,141,239,0.35)" }}>
-            ⟳ RESHUFFLE
-          </button>
-          <div style={{ flex: 1, fontSize: 12, color: "#6C7686", lineHeight: 1.45 }}>
-            Same day = same workout — reshuffle for a new draw. 👍 shows a move more, 👎 swaps it out. Tap a card for form.
-          </div>
-        </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px" }}>
           {homeList.map((e) => {
             const g = GROUPS[e.grp];
@@ -1896,6 +1887,16 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               </div>
             );
           })}
+        </div>
+
+        <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "12px 14px", margin: "14px 16px 0", boxShadow: "0 1px 3px rgba(27,36,48,0.06)", display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={reshuffle}
+            style={{ ...S.pill, flexShrink: 0, padding: "10px 16px", fontSize: 13, fontWeight: 700, background: "linear-gradient(135deg, #5B8DEF, #7B5BE6)", color: "#FFFFFF", boxShadow: "0 3px 8px rgba(91,141,239,0.35)" }}>
+            ⟳ RESHUFFLE
+          </button>
+          <div style={{ flex: 1, fontSize: 12, color: "#6C7686", lineHeight: 1.45 }}>
+            Same day = same workout — reshuffle for a new draw. 👍 shows a move more, 👎 swaps it out. Tap a card for form.
+          </div>
         </div>
 
         {homeTab === "go" ? (
