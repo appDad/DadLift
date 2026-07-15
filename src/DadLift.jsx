@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { loadJSON, saveJSON } from "./storage";
 import { coachModel } from "./firebase";
-import { POSES, GROUPS, BUILTIN, EQUIPMENT, DEFAULT_EQUIP, normalizeEquip, inferEquip, famOf, extendEquipment, equipSlug, buildAddPrompt, validateExercise, resolveFrames } from "./exercises";
+import { POSES, GROUPS, BUILTIN, EQUIPMENT, DEFAULT_EQUIP, normalizeEquip, inferEquip, famOf, levelOf, LEVEL_LABEL, extendEquipment, equipSlug, buildAddPrompt, validateExercise, resolveFrames } from "./exercises";
 import { loadExOverrides, saveExOverrides } from "./exoverrides";
 import { loadEquipExtensions, saveEquipExtensions } from "./catalog";
 import { loadCommunity, publishExercise, unpublishExercise } from "./community";
@@ -71,6 +71,20 @@ function weightedPick(pool, count, rng, ratings, usedFams) {
     const chosen = items.splice(idxMap[sel], 1)[0];
     if (usedFams) usedFams.add(famOf(chosen));
     out.push(chosen);
+  }
+  return out;
+}
+
+/* narrow a pool to a difficulty, but per group: if a group has nothing at the
+   chosen level, keep that group's moves so the workout still fills every slot */
+function filterByLevel(pool, level) {
+  if (level === "all") return pool;
+  const byGrp = {};
+  for (const e of pool) (byGrp[e.grp] = byGrp[e.grp] || []).push(e);
+  const out = [];
+  for (const g in byGrp) {
+    const m = byGrp[g].filter((e) => levelOf(e) === level);
+    out.push(...(m.length ? m : byGrp[g]));
   }
   return out;
 }
@@ -698,6 +712,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [goEffort, setGoEffort] = useState("steady"); // easy | steady | hard
   const [fullMins, setFullMins] = useState(20); // full-workout time budget
   const [fullEffort, setFullEffort] = useState("steady"); // easy | steady | hard
+  const [workoutLevel, setWorkoutLevel] = useState("all"); // all | beg | int | adv difficulty filter
   const [extEquip, setExtEquip] = useState({}); // admin-added catalog entries (config/equipment)
   const [exOverrides, setExOverrides] = useState({}); // admin exercise property overrides (config/exercises)
   const [typeOver, setTypeOver] = useState({}); // personal counted/timed flips (non-admin users)
@@ -749,6 +764,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const haveEquip = (key) => owned.includes(key) && equip[key] !== false; // not owned = never available
   /* only build workouts from exercises whose equipment is on hand */
   const availEx = useMemo(() => allEx.filter((e) => !e.eq || haveEquip(e.eq)), [allEx, equip, owned]);
+  /* difficulty-filtered pool that feeds the full-workout builder */
+  const levelPool = useMemo(() => filterByLevel(availEx, workoutLevel), [availEx, workoutLevel]);
 
   /* per-move time cost: work at current pacing (or interval), ×2 passes,
      get-set countdown, and rest — shared by both session planners */
@@ -763,30 +780,30 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   /* how many slots per round fit the full-workout time budget */
   const fullScale = EFFORT_SCALE[fullEffort] || 1;
   const fullSlots = useMemo(() => {
-    const pool = availEx.filter((e) => !excluded.includes(e.id));
+    const pool = levelPool.filter((e) => !excluded.includes(e.id));
     if (!pool.length) return 8;
     const avg = pool.reduce((s, e) => s + estCost(e, fullScale), 0) / pool.length;
     const budget = fullMins * 60 - (rounds - 1) * roundRest;
     return Math.max(3, Math.min(14, Math.round(budget / (avg * rounds))));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [availEx, excluded, fullMins, fullEffort, rounds, roundRest, mode, hiit, tempo, readySecs, restSecs, uniOverride]);
+  }, [levelPool, excluded, fullMins, fullEffort, rounds, roundRest, mode, hiit, tempo, readySecs, restSecs, uniOverride]);
 
   const workout = useMemo(
     () => buildWorkout(
       today,
-      availEx.filter((e) => !excluded.includes(e.id)),
+      levelPool.filter((e) => !excluded.includes(e.id)),
       emphasis === "balanced" ? null : emphasis,
       ratings,
       shuffleN,
       fullSlots
     ),
-    [today, availEx, emphasis, ratings, shuffleN, excluded, fullSlots]
+    [today, levelPool, emphasis, ratings, shuffleN, excluded, fullSlots]
   );
   /* burn-on-the-go: bodyweight-only, sized to fit the chosen time budget.
      Groups rotate for balance. */
   const goPlan = useMemo(() => {
     const rng = mulberry32(dateSeed(today) * 7 + 13 + shuffleN * 131071);
-    const pool = allEx.filter((e) => !e.eq && !excluded.includes(e.id));
+    const pool = filterByLevel(allEx.filter((e) => !e.eq && !excluded.includes(e.id)), workoutLevel);
     const scale = EFFORT_SCALE[goEffort] || 1;
     const est = (e) => estCost(e, scale);
     // shuffled group order, up to 3 candidates queued per group
@@ -816,7 +833,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       }
     }
     return { picks, estMins: Math.max(1, Math.round(used / 60)) };
-  }, [today, allEx, excluded, ratings, shuffleN, goMins, goEffort, mode, hiit, tempo, readySecs, restSecs, workout.reps, uniOverride, customEx]);
+  }, [today, allEx, excluded, ratings, shuffleN, goMins, goEffort, mode, hiit, tempo, readySecs, restSecs, workout.reps, uniOverride, customEx, workoutLevel]);
   const anywhereWorkout = goPlan.picks;
 
   const exList = quickEx || workout.exercises;
@@ -905,6 +922,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         setGoEffort(s.goEffort ?? "steady");
         setFullMins(s.fullMins ?? 20);
         setFullEffort(s.fullEffort ?? "steady");
+        setWorkoutLevel(s.workoutLevel ?? "all");
         setEquip(s.equip ?? {});
         // normalize any legacy free-text equipment into catalog keys
         // ownership list; migrate legacy customEquip additions into it
@@ -915,8 +933,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   }, []);
   useEffect(() => {
     if (!loaded) return;
-    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned }, { debounce: 600 });
-  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned]);
+    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned, workoutLevel }, { debounce: 600 });
+  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned, workoutLevel]);
 
   /* screen wake lock while working out — counting used to die when the phone locked */
   useEffect(() => {
@@ -1802,6 +1820,26 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           </div>
         )}
 
+        <div style={{ padding: "0 16px 12px" }}>
+          <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, marginBottom: 8 }}>DIFFICULTY</div>
+          <div style={{ display: "flex", gap: 8, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+            {[["all", "ALL LEVELS"], ["beg", "BEGINNER"], ["int", "INTERMEDIATE"], ["adv", "ADVANCED"]].map(([k, label]) => {
+              const on = workoutLevel === k;
+              return (
+                <button key={k} onClick={() => setWorkoutLevel(k)}
+                  style={{
+                    flexShrink: 0, border: "none", borderRadius: 999, cursor: "pointer", padding: "8px 16px",
+                    fontFamily: DISPLAY, fontSize: 14, fontWeight: 700, letterSpacing: 0.5,
+                    background: on ? "#1B2430" : "#FFFFFF", color: on ? "#FFFFFF" : "#6C7686",
+                    boxShadow: on ? "0 3px 10px rgba(27,36,48,0.22)" : "0 1px 3px rgba(27,36,48,0.08)",
+                  }}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px" }}>
           {homeList.map((e) => {
             const g = GROUPS[e.grp];
@@ -1828,6 +1866,11 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                       )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      {(() => {
+                        const lv = levelOf(e);
+                        const c = { beg: ["#2FA671", "#DCF3E7"], int: ["#4F7DF0", "#DCE7FB"], adv: ["#E8433F", "#FCE0DE"] }[lv];
+                        return <span style={{ fontSize: 9, letterSpacing: 0.5, fontWeight: 700, color: c[0], background: c[1], borderRadius: 5, padding: "2px 6px" }}>{lv.toUpperCase()}</span>;
+                      })()}
                       {e.type === "time" && (
                         <span style={{ fontSize: 9, letterSpacing: 0.5, fontWeight: 700, color: "#6C7686", background: "#EFF1F5", borderRadius: 5, padding: "2px 6px" }}>⏱ TIMED</span>
                       )}

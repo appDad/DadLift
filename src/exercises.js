@@ -393,6 +393,27 @@ const FAMILY = {
 };
 BUILTIN.forEach((e) => { if (FAMILY[e.id]) e.fam = FAMILY[e.id]; });
 
+/* difficulty: beg | int | adv. Gym additions carry their own inline level;
+   everything here tags the classic library, and anything untagged is "int". */
+const LEVEL = {
+  // beginner — simple, low-skill, isolation
+  cur: "beg", ham: "beg", wrc: "beg", oht: "beg", kb: "beg", pu: "beg",
+  shg: "beg", sup: "beg", rfl: "beg", pov: "beg", bor: "beg",
+  fp: "beg", wpu: "beg", sqp: "beg", mbs: "beg",
+  plk: "beg", db: "beg", bdg: "beg", sb: "beg", lr: "beg", bic: "beg",
+  gbr: "beg", clf: "beg", stp: "beg", hmc: "beg", lex: "beg", ssq: "beg",
+  lat: "beg", frr: "beg", scp: "beg", lrs: "beg", ohp: "beg", pst: "beg",
+  // advanced — heavy compound, explosive, or high-skill
+  zot: "adv", skc: "adv", dpu: "adv",
+  ren: "adv", swg: "adv", rdl: "adv",
+  bur: "adv", vup: "adv", slm: "adv", hh: "adv",
+  bul: "adv", cly: "adv", thr: "adv",
+  arn: "adv", pp: "adv", ppu: "adv",
+};
+BUILTIN.forEach((e) => { if (!e.level && LEVEL[e.id]) e.level = LEVEL[e.id]; });
+export const levelOf = (e) => (e && e.level) || "int";
+export const LEVEL_LABEL = { beg: "Beginner", int: "Intermediate", adv: "Advanced" };
+
 /* fall back to name-based family for exercises that carry no explicit tag
    (e.g. custom imports) so those cluster-dedupe too */
 export function inferFamily(e) {
