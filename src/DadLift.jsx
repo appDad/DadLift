@@ -1098,7 +1098,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const daysSinceWeigh = lastWeigh
     ? Math.floor((new Date(ymd(today) + "T00:00:00") - new Date(lastWeigh.d + "T00:00:00")) / 86400000)
     : Infinity;
-  const weighDue = weightsSorted.length === 0 || daysSinceWeigh >= 7;
+  // gate on `loaded` so the "weigh-in due" nudge doesn't flash before saved data arrives
+  const weighDue = loaded && (weightsSorted.length === 0 || daysSinceWeigh >= 7);
   // change relative to the very first weigh-in (public page shows only this delta, never the number)
   const weightDelta = weightsSorted.length >= 2
     ? +(lastWeigh.w - weightsSorted[0].w).toFixed(1)
@@ -1739,7 +1740,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               +
             </button>
           </div>
-          {owned.length === 0 ? (
+          {!loaded ? null : owned.length === 0 ? (
             <div onClick={() => { setSettingsFocus("equip"); setScreen("settings"); }}
               style={{ marginTop: 8, background: "#FFF3E0", border: "1px solid #F2C98A", borderRadius: 10, padding: "9px 12px", fontSize: 12, color: "#8A5A16", lineHeight: 1.45, cursor: "pointer" }}>
               👉 Only bodyweight moves show up until you add gear. Tap here to add <b>dumbbells</b> and unlock the full library.
