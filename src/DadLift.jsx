@@ -80,14 +80,14 @@ function weightedPick(pool, count, rng, ratings, usedFams) {
    chosen level; per group, if nothing qualifies, keep that group's moves so the
    workout still fills every slot. */
 const LEVEL_RANK = { beg: 0, int: 1, adv: 2 };
-function filterByLevel(pool, level) {
+function filterByLevel(pool, level, getLevel = levelOf) {
   const cap = level === "all" ? 2 : (LEVEL_RANK[level] ?? 2);
   if (cap >= 2) return pool; // advanced = anything goes
   const byGrp = {};
   for (const e of pool) (byGrp[e.grp] = byGrp[e.grp] || []).push(e);
   const out = [];
   for (const g in byGrp) {
-    const m = byGrp[g].filter((e) => (LEVEL_RANK[levelOf(e)] ?? 1) <= cap);
+    const m = byGrp[g].filter((e) => (LEVEL_RANK[getLevel(e)] ?? 1) <= cap);
     out.push(...(m.length ? m : byGrp[g]));
   }
   return out;
@@ -443,7 +443,7 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
 }
 
 /* ============ library screen ============ */
-function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, communityBy, onHide, ownedEquip, ownedCount, onSetEq, uniOf, onToggleUni, isAdmin, onToggleType, cadenceOf, onSetCad, onSetLevel, onAdminDelete, nav }) {
+function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, communityBy, onHide, ownedEquip, ownedCount, onSetEq, uniOf, onToggleUni, isAdmin, onToggleType, cadenceOf, onSetCad, onSetLevel, curLevel, onAdminDelete, nav }) {
   const [openId, setOpenId] = useState(null);
   const [tab, setTab] = useState("browse"); // browse | add | export
   const [pasteVal, setPasteVal] = useState("");
@@ -587,7 +587,7 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, comm
                           )}
                           <div style={{ display: "inline-flex", gap: 3, background: "#EFF1F5", borderRadius: 999, padding: 3 }}>
                             {[["beg", "BEG", "#2FA671"], ["int", "INT", "#4F7DF0"], ["adv", "ADV", "#E8433F"]].map(([lv, ltr, col]) => {
-                              const on = levelOf(e) === lv;
+                              const on = curLevel(e) === lv;
                               return (
                                 <button key={lv} onClick={() => onSetLevel(e.id, lv)}
                                   style={{ border: "none", cursor: "pointer", borderRadius: 999, padding: "4px 9px", fontSize: 10, fontWeight: 700, letterSpacing: 0.5, background: on ? col : "transparent", color: on ? "#FFFFFF" : "#9AA3B0" }}>
@@ -764,13 +764,14 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       let out = e;
       if (a) out = { ...out, ...a };
       if (p) out = { ...out, ...p };
-      if (levelOver[e.id]) out = { ...out, level: levelOver[e.id] }; // personal difficulty override
       return out;
     };
+    // NOTE: personal difficulty (levelOver) is applied via effLevelOf, NOT baked
+    // here — so re-leveling an exercise doesn't instantly rebuild today's workout
     return [...BUILTIN, ...comm.map(tagEq), ...customEx.map(tagEq)]
       .map(applyOverride)
       .filter((e) => !e.hidden); // admin-hidden built-ins disappear for everyone
-  }, [customEx, community, hiddenComm, extEquip, exOverrides, typeOver, levelOver]);
+  }, [customEx, community, hiddenComm, extEquip, exOverrides, typeOver]);
   const communityBy = useMemo(
     () => Object.fromEntries(community.map((c) => [c.ex.id, c.by])),
     [community]
@@ -783,8 +784,18 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const haveEquip = (key) => owned.includes(key) && equip[key] !== false; // not owned = never available
   /* only build workouts from exercises whose equipment is on hand */
   const availEx = useMemo(() => allEx.filter((e) => !e.eq || haveEquip(e.eq)), [allEx, equip, owned]);
-  /* difficulty-filtered pool that feeds the full-workout builder */
-  const levelPool = useMemo(() => filterByLevel(availEx, workoutLevel), [availEx, workoutLevel]);
+  /* effective difficulty: personal override wins, else the admin-global/built-in
+     level baked into the exercise. Kept OUT of allEx so editing it doesn't
+     instantly re-filter today's workout — it lands on the next rebuild. */
+  const effLevelOf = (e) => (e && levelOver[e.id]) || levelOf(e);
+  /* difficulty-filtered pool. Recomputes on rebuild triggers (equipment, the
+     filter itself, reshuffle) and reads the CURRENT levelOver then — but not on
+     a bare level edit, so a just-changed exercise stays until you move on. */
+  const levelPool = useMemo(
+    () => filterByLevel(availEx, workoutLevel, effLevelOf),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [availEx, workoutLevel, shuffleN, today]
+  );
 
   /* per-move time cost: work at current pacing (or interval), ×2 passes,
      get-set countdown, and rest — shared by both session planners */
@@ -822,7 +833,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
      Groups rotate for balance. */
   const goPlan = useMemo(() => {
     const rng = mulberry32(dateSeed(today) * 7 + 13 + shuffleN * 131071);
-    const pool = filterByLevel(allEx.filter((e) => !e.eq && !excluded.includes(e.id)), workoutLevel);
+    const pool = filterByLevel(allEx.filter((e) => !e.eq && !excluded.includes(e.id)), workoutLevel, effLevelOf);
     const scale = EFFORT_SCALE[goEffort] || 1;
     const est = (e) => estCost(e, scale);
     // shuffled group order, up to 3 candidates queued per group
@@ -1519,7 +1530,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       ownedEquip={equipKeys.filter(haveEquip)} ownedCount={owned.length} onSetEq={setCustomEq}
       uniOf={effUni} onToggleUni={toggleUni}
       isAdmin={isAdmin} onToggleType={toggleType}
-      cadenceOf={cadenceOf} onSetCad={setCad} onSetLevel={setLevelOv} onAdminDelete={adminDeleteExercise}
+      cadenceOf={cadenceOf} onSetCad={setCad} onSetLevel={setLevelOv} curLevel={effLevelOf} onAdminDelete={adminDeleteExercise}
       nav={<NavBar current="library" onNav={setScreen} weighDue={weighDue} />}
       onBack={() => setScreen("home")} />;
   }
@@ -1910,7 +1921,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                       {(() => {
-                        const lv = levelOf(e);
+                        const lv = effLevelOf(e);
                         const c = { beg: ["#2FA671", "#DCF3E7"], int: ["#4F7DF0", "#DCE7FB"], adv: ["#E8433F", "#FCE0DE"] }[lv];
                         return <span style={{ fontSize: 9, letterSpacing: 0.5, fontWeight: 700, color: c[0], background: c[1], borderRadius: 5, padding: "2px 6px" }}>{lv.toUpperCase()}</span>;
                       })()}
@@ -1956,7 +1967,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                         )}
                         <div onClick={(ev) => ev.stopPropagation()} style={{ display: "inline-flex", gap: 3, background: "#EFF1F5", borderRadius: 999, padding: 3 }}>
                           {[["beg", "BEG", "#2FA671"], ["int", "INT", "#4F7DF0"], ["adv", "ADV", "#E8433F"]].map(([lv, ltr, col]) => {
-                            const on = levelOf(e) === lv;
+                            const on = effLevelOf(e) === lv;
                             return (
                               <button key={lv} onClick={() => setLevelOv(e.id, lv)}
                                 style={{ border: "none", cursor: "pointer", borderRadius: 999, padding: "4px 9px", fontSize: 10, fontWeight: 700, letterSpacing: 0.5, background: on ? col : "transparent", color: on ? "#FFFFFF" : "#9AA3B0" }}>
