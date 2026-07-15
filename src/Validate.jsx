@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { collectionGroup, getDocs } from "firebase/firestore";
 import { db } from "./firebase";
+import { loadJSON, saveJSON } from "./storage";
 import { styles, DISPLAY, FONT_CSS } from "./theme";
 
 /* Admin-only review queue: aggregates the tweaks people made to exercises on
@@ -9,21 +10,41 @@ import { styles, DISPLAY, FONT_CSS } from "./theme";
 const PROP_LABEL = { level: "Difficulty", type: "Counted / timed", uni: "Both sides" };
 const LEVEL_NAME = { beg: "Beginner", int: "Intermediate", adv: "Advanced" };
 
+/* stable id for a suggestion (exercise + property + value) so discards persist */
+const keyOf = (s) => {
+  const v = s.prop === "level" ? s.patch.level
+    : s.prop === "uni" ? String(s.patch.uni)
+    : s.patch.type === "time" ? `time${s.patch.secs || ""}` : "reps";
+  return `${s.exId}|${s.prop}|${v}`;
+};
+
 export default function Validate({ allEx, exOverrides, onMakeGlobal, nav }) {
   const S = styles;
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
+  const dismissedRef = useRef([]); // persisted keys the admin has discarded
   const nameOf = (id) => (allEx.find((e) => e.id === id) || {}).name || id;
-  // promote to global, then drop this row + any competing value for the same
-  // exercise/property (that call is now settled)
+  // promote to global; drop this row (it now matches the default, so it's also
+  // hidden on reload). A competing value for the same exercise stays — it still
+  // differs from the new default, so it's a real "someone disagrees" item.
   const makeGlobal = (s) => {
     onMakeGlobal(s.exId, s.patch);
-    setRows((rs) => rs.filter((r) => !(r.exId === s.exId && r.prop === s.prop)));
+    setRows((rs) => rs.filter((r) => keyOf(r) !== keyOf(s)));
+  };
+  // reject a suggestion — persist it so it stays gone; leftover rows = unreviewed
+  const discard = (s) => {
+    const key = keyOf(s);
+    const next = [...dismissedRef.current, key];
+    dismissedRef.current = next;
+    saveJSON("validatedismiss", next);
+    setRows((rs) => rs.filter((r) => keyOf(r) !== key));
   };
 
   useEffect(() => {
     (async () => {
       try {
+        dismissedRef.current = await loadJSON("validatedismiss", []);
+        const dset = new Set(dismissedRef.current);
         const snap = await getDocs(collectionGroup(db, "kv"));
         const agg = {};
         const bump = (exId, prop, patch, label, uid) => {
@@ -49,10 +70,11 @@ export default function Validate({ allEx, exOverrides, onMakeGlobal, nav }) {
             }
           }
         });
-        // hide anything that already matches the current global default
+        // hide anything already matching the global default OR previously discarded
         const list = Object.values(agg)
           .map((s) => ({ ...s, count: s.users.size }))
           .filter((s) => {
+            if (dset.has(keyOf(s))) return false;
             const cur = exOverrides[s.exId] || {};
             return Object.entries(s.patch).some(([k, v]) => cur[k] !== v);
           })
@@ -93,10 +115,16 @@ export default function Validate({ allEx, exOverrides, onMakeGlobal, nav }) {
                   <span style={{ color: "#9AA3B0" }}> · {s.count} {s.count === 1 ? "person" : "people"}</span>
                 </div>
               </div>
-              <button onClick={() => makeGlobal(s)}
-                style={{ ...S.pill, flexShrink: 0, background: "#1B2430", color: "#F5F6F8" }}>
-                make global
-              </button>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0, alignItems: "stretch" }}>
+                <button onClick={() => makeGlobal(s)}
+                  style={{ ...S.pill, background: "#1B2430", color: "#F5F6F8", fontSize: 12, padding: "6px 14px" }}>
+                  make global
+                </button>
+                <button onClick={() => discard(s)}
+                  style={{ border: "none", background: "none", color: "#9AA3B0", fontSize: 11, cursor: "pointer", textDecoration: "underline" }}>
+                  discard
+                </button>
+              </div>
             </div>
           );
         })}
