@@ -993,11 +993,17 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     setCadence(next);
     saveJSON("cadence", next);
   };
-  /* personal difficulty override — always per-user, never global (even for admin) */
+  /* difficulty edit. Admin = head validator: sets the GLOBAL default for
+     everyone. Any user's personal pick overrides that default for themselves. */
   const setLevelOv = (id, lv) => {
-    const next = { ...levelOver, [id]: lv };
-    setLevelOver(next);
-    saveJSON("levelover", next);
+    if (isAdmin) {
+      setAdminOverride(id, { level: lv }); // global default (config/exercises)
+      if (levelOver[id]) { const n = { ...levelOver }; delete n[id]; setLevelOver(n); saveJSON("levelover", n); } // my global wins — drop my personal shadow
+    } else {
+      const next = { ...levelOver, [id]: lv };
+      setLevelOver(next);
+      saveJSON("levelover", next);
+    }
   };
 
   /* two-pass (per-side) control. Precedence: my personal override, then the
