@@ -657,6 +657,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [hiit, setHiit] = useState([40, 20]); // [work secs, rest secs]
   const [restSecs, setRestSecs] = useState(15);
   const [roundRest, setRoundRest] = useState(45);
+  const [venue, setVenue] = useState("home"); // home | gym — gym gives longer, self-paced transitions
+  const [gymRest, setGymRest] = useState(60); // suggested transition seconds between gym stations
   const [voiceOn, setVoiceOn] = useState(true);
   const [round, setRound] = useState(1);
   const [idx, setIdx] = useState(0);
@@ -916,6 +918,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         setRounds(s.rounds ?? 2); setTempo(s.tempo ?? 3); setVoiceOn(s.voiceOn ?? true);
         setMode(s.mode ?? "circuit"); setHiit(s.hiit ?? [40, 20]);
         setRestSecs(s.restSecs ?? 15); setRoundRest(s.roundRest ?? 45);
+        setVenue(s.venue ?? "home"); setGymRest(s.gymRest ?? 60);
         setEmphasis(s.emphasis ?? "balanced");
         setReadySecs(s.readySecs ?? 5);
         setGoMins(s.goMins ?? 10);
@@ -933,8 +936,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   }, []);
   useEffect(() => {
     if (!loaded) return;
-    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned, workoutLevel }, { debounce: 600 });
-  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned, workoutLevel]);
+    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned, workoutLevel, venue, gymRest }, { debounce: 600 });
+  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned, workoutLevel, venue, gymRest]);
 
   /* screen wake lock while working out — counting used to die when the phone locked */
   useEffect(() => {
@@ -1273,10 +1276,12 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     beep(1200, 0.25);
     const goRest = (announceText, secs) => { setPhase("rest"); setTimeLeft(secs); say(announceText); };
 
+    const gym = venue === "gym" && mode !== "hiit"; // longer, self-paced station changes
     if (idx + 1 < exList.length) {
-      goRest(`Rest. Next up: ${exList[idx + 1].name}`, mode === "hiit" ? hiit[1] : restSecs);
+      goRest(gym ? `Head to your next station: ${exList[idx + 1].name}` : `Rest. Next up: ${exList[idx + 1].name}`,
+        mode === "hiit" ? hiit[1] : gym ? gymRest : restSecs);
     } else if (round < sessionRounds) {
-      goRest(`Round ${round} done. Long rest.`, roundRest);
+      goRest(`Round ${round} done. Long rest.`, gym ? Math.max(gymRest, roundRest) : roundRest);
     } else {
       finish();
     }
@@ -1366,6 +1371,10 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     if (screen !== "player" || paused) return;
     const timed = phase === "rest" || phase === "ready" || mode === "hiit" || (ex && ex.type === "time");
     if (!timed) return;
+    // gym transitions are self-paced: once the countdown hits 0, hold here and
+    // wait for the lifter to tap "I'm ready" (no auto-advance onto the next machine)
+    const gymHold = phase === "rest" && venue === "gym" && mode !== "hiit";
+    if (gymHold && timeLeft === 0) return;
     if (phase === "work" && timeLeft === 0) {
       const v0 = mode === "hiit" ? hiit[0] : secsOf(ex);
       timeLeftRef.current = v0;
@@ -1393,6 +1402,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               : "Go.");
             return 0;
           }
+          // gym: hold at 0 for a self-paced station change (READY button advances)
+          if (gymHold) return 0;
           // defer the transition out of this state-updater: calling advance/
           // startNext here would set the rest countdown, but our `return 0`
           // below would clobber it and the rest would be skipped
@@ -1416,7 +1427,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     }, 1000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, phase, idx, round, mode, paused, ex && ex.type, timeLeft === 0]);
+  }, [screen, phase, idx, round, mode, paused, ex && ex.type, timeLeft === 0, venue]);
 
   useEffect(() => {
     if (screen !== "player" || paused || phase !== "work" || mode === "hiit" || !ex || ex.type !== "reps") return;
@@ -1966,6 +1977,15 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         ) : (
         <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "4px 16px" }}>
+            <SetupRow label="WHERE">
+              <Seg options={[["home", "🏠 HOME"], ["gym", "🏋 GYM"]]} value={venue} onChange={setVenue}
+                colors={{ home: "#2FA671", gym: "#4F7DF0" }} />
+            </SetupRow>
+            {venue === "gym" && (
+              <SetupRow label="TRANSITION">
+                <MiniStep value={gymRest} unit="s" min={30} max={180} step={15} onChange={setGymRest} />
+              </SetupRow>
+            )}
             <SetupRow label="MODE">
               <Seg options={[["circuit", "CIRCUIT"], ["hiit", "HIIT"]]} value={mode} onChange={setMode}
                 colors={{ circuit: "#1B2430", hiit: "#E8590C" }} />
@@ -2049,8 +2069,9 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const nextEx = idx + 1 < exList.length ? exList[idx + 1] : round < sessionRounds ? exList[0] : null;
   const shown = isRest && nextEx ? nextEx : ex;
   const shownG = GROUPS[shown.grp];
+  const gymTransition = isRest && venue === "gym" && mode !== "hiit"; // self-paced station change
   const total = isRest
-    ? (idx + 1 < exList.length ? (mode === "hiit" ? hiit[1] : restSecs) : roundRest)
+    ? (idx + 1 < exList.length ? (mode === "hiit" ? hiit[1] : gymTransition ? gymRest : restSecs) : (gymTransition ? Math.max(gymRest, roundRest) : roundRest))
     : isReady
       ? readySecs
       : (mode === "hiit" ? hiit[0] : ex.type === "time" ? secsOf(ex) : 0);
@@ -2068,7 +2089,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "0 20px", textAlign: "center" }}>
         <div style={{ fontSize: 12, letterSpacing: 2, fontWeight: 700, color: shownG.color, textTransform: "uppercase" }}>
-          {isRest ? "REST — UP NEXT"
+          {isRest ? (gymTransition ? "🏋 HEAD TO YOUR NEXT STATION" : "REST — UP NEXT")
             : isReady ? "GET SET" + (side === "L" ? (ex.type === "time" ? " — SIDE 1" : " — LEFT SIDE") : side === "R" ? (ex.type === "time" ? " — SIDE 2" : " — RIGHT SIDE") : "")
             : shownG.label}
         </div>
@@ -2101,7 +2122,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           <Ring total={total} left={timeLeft} color={isRest ? "#6C7686" : isReady ? "#B47E10" : g.color}>
             <div style={{ fontFamily: DISPLAY, fontSize: 64, fontWeight: 700, lineHeight: 1 }}>{timeLeft}</div>
             <div style={{ fontSize: 12, color: "#6C7686", letterSpacing: 1 }}>
-              {isRest ? "REST" : isReady ? "GET SET" : mode === "hiit" && ex.type === "reps" ? "MAX REPS"
+              {isRest ? (gymTransition ? (timeLeft === 0 ? "READY?" : "TRANSITION") : "REST") : isReady ? "GET SET" : mode === "hiit" && ex.type === "reps" ? "MAX REPS"
                 : `${side === "L" ? "SIDE 1 · " : side === "R" ? "SIDE 2 · " : ""}SECONDS`}
             </div>
           </Ring>
@@ -2131,6 +2152,12 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       </div>
 
       <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+        {gymTransition && (
+          <button onClick={startNext}
+            style={{ ...S.startBtn, background: "linear-gradient(135deg, #4F7DF0, #7B5BE6)", color: "#FFFFFF" }}>
+            ✓ I'M READY — START {shown.name.toUpperCase()}
+          </button>
+        )}
         <button onClick={() => setPaused((p) => !p)}
           style={{ ...S.startBtn, background: paused ? "#2FA671" : "#E4E7EC", color: paused ? "#FFFFFF" : "#1B2430" }}>
           {paused ? "▶ RESUME" : "❚❚ PAUSE"}
