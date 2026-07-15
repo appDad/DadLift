@@ -679,7 +679,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [round, setRound] = useState(1);
   const [idx, setIdx] = useState(0);
   const [sessionRounds, setSessionRounds] = useState(2); // rounds for the RUNNING session (quick = 1)
-  const [quickEx, setQuickEx] = useState(null); // active do-anywhere list, null = today's workout
+  const [quickEx, setQuickEx] = useState(null); // active do-anywhere list, null = today's workout (also the "is burn" flag)
+  const [sessionIds, setSessionIds] = useState(null); // frozen MEMBERSHIP (ids) for the running session; objects stay live so edits still show
   const [phase, setPhase] = useState("work"); // work | rest | ready (get-set countdown, circuit only)
   const [timeLeft, setTimeLeft] = useState(0);
   const [rep, setRep] = useState(0);
@@ -858,7 +859,13 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   }, [today, allEx, excluded, ratings, shuffleN, goMins, goEffort, mode, hiit, tempo, readySecs, restSecs, workout.reps, uniOverride, customEx, workoutLevel]);
   const anywhereWorkout = goPlan.picks;
 
-  const exList = quickEx || workout.exercises;
+  // during a session, keep the SAME exercises (frozen ids) but resolve each to
+  // its LIVE object so in-workout edits (level/sides/timed) show immediately
+  // without reshuffling which exercises you're doing
+  const exList = useMemo(
+    () => (sessionIds ? sessionIds.map((id) => allEx.find((e) => e.id === id)).filter(Boolean) : workout.exercises),
+    [sessionIds, allEx, workout.exercises]
+  );
   const ex = exList[idx];
   /* effort scaling: the live session's effort setting (burn or full) */
   const sessionScale = quickEx ? (EFFORT_SCALE[goEffort] || 1) : fullScale;
@@ -1373,7 +1380,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       const progress = ex.type === "reps" && mode !== "hiit" ? repRef.current > 0 : elapsed > 0;
       if (progress) logDone(true); // partial — excluded from target adaptation
     }
-    if (sessionLogRef.current.length === 0) { setQuickEx(null); setScreen("home"); return; }
+    if (sessionLogRef.current.length === 0) { setQuickEx(null); setSessionIds(null); setScreen("home"); return; }
     openSummary();
   };
 
@@ -1403,7 +1410,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     if (share.on && share.id) publishSnapshot(user.uid, firstName(), newHist, share.id, weightExtra());
     setLastEntry(entry);
     setDoneExList(exList);
-    setQuickEx(null); // session over — home shows today's regular workout again
+    setQuickEx(null); setSessionIds(null); // session over — home shows today's regular workout again
     setScreen("done");
     const summary = `${entry.exDone} exercise sets, ${entry.totalReps} reps total (${entry.exercises.join(", ") || "nothing finished"})`;
     fetchCoachLine(newHist, summary).then(setCoachLine);
@@ -1496,6 +1503,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   }, [screen, phase, idx, round, mode, paused, side, ex && ex.type, ex && cadenceOf(ex)]);
 
   const launch = (list) => {
+    setSessionIds(list.map((e) => e.id)); // freeze which exercises this session runs
     setRound(1); setIdx(0);
     savedRef.current = false; setCoachLine(null); setLastEntry(null);
     setPaused(false);
@@ -1716,7 +1724,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           <button onClick={saveSummary} style={S.startBtn}>
             SAVE WORKOUT — {doneCount} SET{doneCount === 1 ? "" : "S"}
           </button>
-          <button onClick={() => { setQuickEx(null); setScreen("home"); }} style={{ ...S.ghostBtn, color: "#E85D5D" }}>discard, save nothing</button>
+          <button onClick={() => { setQuickEx(null); setSessionIds(null); setScreen("home"); }} style={{ ...S.ghostBtn, color: "#E85D5D" }}>discard, save nothing</button>
         </div>
       </div>
     );
@@ -2263,6 +2271,20 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: "#EFF1F5", color: "#6C7686" }}>
               {ex.type === "time" ? `⏱ TIMED ${secsOf(ex)}s` : "# COUNTED"}
             </button>
+          </div>
+        )}
+        {!isRest && mode !== "hiit" && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#9AA3B0", letterSpacing: 1, width: 42, flexShrink: 0 }}>LEVEL</span>
+            {[["beg", "BEG", "#2FA671"], ["int", "INT", "#4F7DF0"], ["adv", "ADV", "#E8433F"]].map(([lv, label, col]) => {
+              const on = levelOf(ex) === lv;
+              return (
+                <button key={lv} onClick={() => setLevelOv(ex.id, lv)}
+                  style={{ ...S.startBtn, flex: 1, fontSize: 14, padding: "12px 0", background: on ? col : "#EFF1F5", color: on ? "#FFFFFF" : "#6C7686" }}>
+                  {label}
+                </button>
+              );
+            })}
           </div>
         )}
         {!isRest && !isReady && mode !== "hiit" && ex.type === "reps" && (
