@@ -13,8 +13,13 @@ export default function Validate({ allEx, exOverrides, onMakeGlobal, nav }) {
   const S = styles;
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
-  const [done, setDone] = useState({});
   const nameOf = (id) => (allEx.find((e) => e.id === id) || {}).name || id;
+  // promote to global, then drop this row + any competing value for the same
+  // exercise/property (that call is now settled)
+  const makeGlobal = (s) => {
+    onMakeGlobal(s.exId, s.patch);
+    setRows((rs) => rs.filter((r) => !(r.exId === s.exId && r.prop === s.prop)));
+  };
 
   useEffect(() => {
     (async () => {
@@ -79,7 +84,6 @@ export default function Validate({ allEx, exOverrides, onMakeGlobal, nav }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "8px 16px 24px" }}>
         {rows && rows.map((s) => {
           const k = `${s.exId}|${s.prop}|${s.label}`;
-          const applied = done[k];
           return (
             <div key={k} style={{ ...S.card, cursor: "default", display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -89,10 +93,9 @@ export default function Validate({ allEx, exOverrides, onMakeGlobal, nav }) {
                   <span style={{ color: "#9AA3B0" }}> · {s.count} {s.count === 1 ? "person" : "people"}</span>
                 </div>
               </div>
-              <button disabled={applied}
-                onClick={() => { onMakeGlobal(s.exId, s.patch); setDone((d) => ({ ...d, [k]: true })); }}
-                style={{ ...S.pill, flexShrink: 0, background: applied ? "#DFF5EA" : "#1B2430", color: applied ? "#2FA671" : "#F5F6F8" }}>
-                {applied ? "✓ global" : "make global"}
+              <button onClick={() => makeGlobal(s)}
+                style={{ ...S.pill, flexShrink: 0, background: "#1B2430", color: "#F5F6F8" }}>
+                make global
               </button>
             </div>
           );
