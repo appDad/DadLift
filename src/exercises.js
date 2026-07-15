@@ -328,6 +328,33 @@ export const BUILTIN = [
   { id: "bnp", grp: "chest", name: "Dumbbell Bench Press", type: "reps", pose: "benchPress", cue: "Lying on a bench, dumbbells pressed above your chest. Lower to chest level with elbows about 45 degrees, press back up to lockout." },
   { id: "ftr", grp: "back", name: "Floor T Raise", type: "reps", pose: "floorTRaise", cue: "Face down, arms straight out to the sides in a T with light dumbbells. Lift your chest and arms, squeeze your shoulder blades, lower slow." },
   { id: "bdr", grp: "back", name: "Bird Dog Row", type: "reps", pose: "birdDogRow", cue: "On all fours or a staggered stance, row one dumbbell from the floor to your ribs without twisting your hips. Anti-rotation plus back. Count is per side." },
+  /* ---- barbell (gym) ---- */
+  { id: "bbsq", grp: "legs", name: "Barbell Back Squat", type: "reps", eq: "barbell", fam: "squat", level: "int", cad: 4, pose: "sumoSquat", cue: "Bar racked across your upper back. Brace your core, sit down between your hips to at least parallel, then drive up through mid-foot. Knees track over toes." },
+  { id: "bbfsq", grp: "legs", name: "Barbell Front Squat", type: "reps", eq: "barbell", fam: "squat", level: "adv", cad: 4, pose: "sumoSquat", cue: "Bar racked on your front delts, elbows high. Stay tall through the chest as you squat down and drive back up. Upright torso the whole way." },
+  { id: "bbdl", grp: "back", name: "Barbell Deadlift", type: "reps", eq: "barbell", fam: "hinge", level: "adv", cad: 4, pose: "rdl", cue: "Bar over mid-foot. Hinge and grip it, flatten your back, then stand up by pushing the floor away. Bar stays close to your legs. Reset each rep." },
+  { id: "bbrdl", grp: "legs", name: "Barbell Romanian Deadlift", type: "reps", eq: "barbell", fam: "hinge", level: "int", cad: 4, pose: "rdl", cue: "Soft knees, bar against your thighs. Push your hips back and lower the bar down your legs until you feel your hamstrings stretch, then drive your hips forward." },
+  { id: "bbbp", grp: "chest", name: "Barbell Bench Press", type: "reps", eq: "barbell", fam: "chestpress", level: "int", cad: 3, pose: "benchPress", cue: "On a bench, grip just outside shoulder width. Lower the bar to mid-chest with elbows tucked around 45 degrees, then press back to lockout." },
+  { id: "bbop", grp: "shoulders", name: "Barbell Overhead Press", type: "reps", eq: "barbell", fam: "press", level: "int", cad: 3, pose: "ohp", cue: "Bar at your front delts, standing tall, glutes and core tight. Press straight overhead, moving your head back slightly to clear the bar, then lock out." },
+  { id: "bbbr", grp: "back", name: "Barbell Bent-Over Row", type: "reps", eq: "barbell", fam: "row", level: "int", cad: 3, pose: "row", cue: "Hinge to about 45 degrees, flat back. Row the bar to your lower ribs, driving your elbows back and squeezing your shoulder blades, then lower under control." },
+  { id: "bbht", grp: "legs", name: "Barbell Hip Thrust", type: "reps", eq: "barbell", fam: "glute", level: "int", cad: 3, pose: "gluteBridge", cue: "Upper back on a bench, bar across your hips. Drive through your heels to full hip extension, squeeze your glutes hard at the top, lower slow." },
+  { id: "bbcl", grp: "arms", name: "Barbell Curl", type: "reps", eq: "barbell", fam: "curl", level: "beg", cad: 3, pose: "curl", cue: "Bar at shoulder width, elbows pinned to your sides. Curl up without swinging, squeeze, then lower on a slow count." },
+  /* ---- cable (gym) ---- */
+  { id: "cbpd", grp: "back", name: "Lat Pulldown", type: "reps", eq: "cable", fam: "pulldown", level: "beg", cad: 3, pose: "pullover", cue: "Seated, thighs anchored. Pull the bar down to your upper chest by driving your elbows down and back, squeeze your lats, then rise under control." },
+  { id: "cbsr", grp: "back", name: "Seated Cable Row", type: "reps", eq: "cable", fam: "row", level: "beg", cad: 3, pose: "row", cue: "Tall chest, slight lean. Pull the handle to your belly, driving your elbows straight back and squeezing your shoulder blades, then reach forward slow." },
+  { id: "cbcf", grp: "chest", name: "Cable Chest Fly", type: "reps", eq: "cable", fam: "chestpress", level: "int", cad: 3, pose: "fly", cue: "Handles high or mid, soft elbows. Bring your hands together in front of your chest in a hugging arc, squeeze, then open slow with control." },
+  { id: "cbtp", grp: "arms", name: "Cable Tricep Pushdown", type: "reps", eq: "cable", fam: "tricep", level: "beg", cad: 2, pose: "kickback", cue: "Elbows pinned to your sides. Push the bar or rope down until your arms lock out, squeeze the triceps, then let it rise only to 90 degrees." },
+  { id: "cbcl", grp: "arms", name: "Cable Curl", type: "reps", eq: "cable", fam: "curl", level: "beg", cad: 2, pose: "curl", cue: "Low pulley, elbows fixed at your sides. Curl the handle up with constant tension, squeeze, then lower slow. No swinging." },
+  { id: "cbll", grp: "shoulders", name: "Cable Lateral Raise", type: "reps", eq: "cable", fam: "raise", level: "int", cad: 2, pose: "latRaise", cue: "Cable across your body from the low pulley. Raise your arm out to shoulder height with a soft elbow, pause, lower slow. Count is per side." },
+  { id: "cbfp", grp: "shoulders", name: "Cable Face Pull", type: "reps", eq: "cable", fam: "raise", level: "beg", cad: 2, pose: "revFly", cue: "Rope at face height. Pull toward your forehead, splitting the rope and driving your elbows high and back, squeeze the rear delts, then extend slow." },
+  { id: "cbwc", grp: "core", name: "Cable Woodchop", type: "reps", eq: "cable", level: "int", uni: true, cad: 2, pose: "woodChop", cue: "Cable high on one side. Pull it down and across your body to the opposite hip, rotating through your trunk, then return slow. Switch sides halfway." },
+  { id: "cbpt", grp: "legs", name: "Cable Pull-Through", type: "reps", eq: "cable", fam: "hinge", level: "beg", cad: 3, pose: "pullThrough", cue: "Rope between your legs from the low pulley, facing away. Hinge at the hips letting the rope pull you back, then snap your hips forward and squeeze your glutes." },
+  /* ---- machine (gym) ---- */
+  { id: "mlp", grp: "legs", name: "Leg Press", type: "reps", eq: "machine", fam: "squat", level: "beg", cad: 3, pose: "sumoSquat", cue: "Feet mid-platform, shoulder width. Lower until your knees reach about 90 degrees, then press through your whole foot without locking out hard." },
+  { id: "mlx", grp: "legs", name: "Machine Leg Extension", type: "reps", eq: "machine", level: "beg", cad: 2, pose: "legExtension", cue: "Pad on your lower shins. Straighten your knees to lift, squeeze your quads hard at the top, then lower slow. Do not swing the weight up." },
+  { id: "mlc", grp: "legs", name: "Seated Leg Curl", type: "reps", eq: "machine", level: "beg", cad: 2, pose: "hamstringCurl", cue: "Pad on your lower calves. Curl your heels down and under, squeeze your hamstrings, then return slow under control." },
+  { id: "mcp", grp: "chest", name: "Chest Press Machine", type: "reps", eq: "machine", fam: "chestpress", level: "beg", cad: 3, pose: "benchPress", cue: "Handles at mid-chest, back flat on the pad. Press forward to near lockout, squeeze your chest, then return slow until you feel a stretch." },
+  { id: "msp", grp: "shoulders", name: "Shoulder Press Machine", type: "reps", eq: "machine", fam: "press", level: "beg", cad: 3, pose: "ohp", cue: "Handles at shoulder height, back against the pad. Press straight up to near lockout, then lower slow to the start." },
+  { id: "mpd", grp: "chest", name: "Pec Deck", type: "reps", eq: "machine", fam: "chestpress", level: "beg", cad: 2, pose: "fly", cue: "Forearms or handles on the pads. Bring them together in front of your chest, squeeze hard, then open slow with control." },
 ];
 
 /* equipment tags: "db" dumbbells, "ball" med ball, untagged = bodyweight only */
@@ -394,7 +421,9 @@ export const EQUIPMENT = {
   bands: { label: "resistance bands", aliases: ["band", "resistance band", "loop band", "mini band", "tube band"] },
   pullup: { label: "pull-up bar", aliases: ["pullup bar", "pull up bar", "chin-up bar", "chin up bar", "chinup bar"] },
   bench: { label: "bench", aliases: ["weight bench", "flat bench", "workout bench"] },
-  barbell: { label: "barbell", aliases: ["bar bell", "olympic bar"] },
+  barbell: { label: "barbell", aliases: ["bar bell", "olympic bar", "ez bar", "ez curl bar"] },
+  cable: { label: "cable machine", aliases: ["cables", "cable", "cable stack", "pulley", "functional trainer", "lat pulldown"] },
+  machine: { label: "weight machine", aliases: ["machines", "machine", "selectorized", "leg press", "smith machine", "pec deck", "hammer strength"] },
   jumprope: { label: "jump rope", aliases: ["skipping rope", "speed rope", "jumping rope"] },
   trx: { label: "suspension trainer", aliases: ["suspension straps", "rings", "gymnastic rings", "gym rings"] },
   abwheel: { label: "ab wheel", aliases: ["ab roller", "wheel roller", "abs wheel"] },
@@ -460,6 +489,7 @@ const ADD_PROMPT_BASE = `Generate a JSON array of exercises for my workout app. 
   "fam": "pushup",               // optional movement family so similar moves don't cluster — e.g. pushup, plank, curl, row, press, raise, tricep, squat, lunge, crunch, hinge, chestpress, glute, backext, quadruped. Omit if none fits.
   "uni": true,                   // optional — set true if the exercise works one side/arm/leg/direction at a time (NOT alternating); the app then runs the set twice, once per side
   "cad": 3,                      // optional seconds-per-rep for counted moves (1–6). Slower (4–5) for heavy/controlled lifts, faster (1.5–2) for explosive or high-rep moves like crunches. Omit for the default 3.
+  "level": "int",                // optional difficulty — "beg" | "int" | "adv". Beginner = simple/low-skill, advanced = high-skill or heavy compound. Omit if unsure.
   "cue": "One or two sentences of plain-language form instruction.",
   "frames": [FRAME_A, FRAME_B]   // start and end position stick figures
 }]
@@ -503,6 +533,7 @@ export function validateExercise(e) {
   if (e.uni != null && typeof e.uni !== "boolean") errs.push("uni must be true/false or omitted");
   if (e.fam != null && typeof e.fam !== "string") errs.push("fam must be a string or omitted");
   if (e.cad != null && !(e.cad >= 1 && e.cad <= 6)) errs.push("cad must be 1–6 seconds or omitted");
+  if (e.level != null && !["beg", "int", "adv"].includes(e.level)) errs.push("level must be beg, int, or adv or omitted");
   if (!e.cue) errs.push("missing cue");
   const frames = e.frames || POSES[e.pose];
   if (!Array.isArray(frames) || frames.length !== 2) errs.push("needs frames[2] (or a valid pose key)");

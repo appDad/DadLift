@@ -748,7 +748,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   }, [owned]);
   const haveEquip = (key) => owned.includes(key) && equip[key] !== false; // not owned = never available
   /* only build workouts from exercises whose equipment is on hand */
-  const availEx = useMemo(() => allEx.filter((e) => !e.eq || haveEquip(e.eq)), [allEx, equip]);
+  const availEx = useMemo(() => allEx.filter((e) => !e.eq || haveEquip(e.eq)), [allEx, equip, owned]);
 
   /* per-move time cost: work at current pacing (or interval), ×2 passes,
      get-set countdown, and rest — shared by both session planners */
