@@ -2239,52 +2239,53 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           style={{ ...S.startBtn, background: paused ? "#2FA671" : "#E4E7EC", color: paused ? "#FFFFFF" : "#1B2430" }}>
           {paused ? "▶ RESUME" : "❚❚ PAUSE"}
         </button>
-        {!isRest && !isReady && mode !== "hiit" && ex.type === "reps" && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button onClick={() => setCad(ex.id, cadenceOf(ex) + 0.5)}
-              title="Slow the count down for this exercise"
-              style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: "#EFF1F5", color: "#6C7686" }}>
-              🐢 SLOWER
-            </button>
-            <div style={{ fontFamily: DISPLAY, fontSize: 15, fontWeight: 700, color: "#6C7686", minWidth: 58, textAlign: "center" }}>
-              {cadenceOf(ex)}s/rep
-            </div>
-            <button onClick={() => setCad(ex.id, cadenceOf(ex) - 0.5)}
-              title="Speed the count up for this exercise"
-              style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: "#EFF1F5", color: "#6C7686" }}>
-              🐇 FASTER
-            </button>
-          </div>
-        )}
         {!isRest && mode !== "hiit" && (
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={togglePlayerUni}
-              style={{
-                ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0",
-                background: effUni(ex) ? "#DCE7FB" : "#EFF1F5",
-                color: effUni(ex) ? "#2456B3" : "#6C7686",
-              }}>
-              {effUni(ex) ? "R/L SIDES" : "NO SIDES"}
-            </button>
-            <button onClick={togglePlayerType}
-              title="Tap to switch this exercise between timed and counted"
-              style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: "#EFF1F5", color: "#6C7686" }}>
-              {ex.type === "time" ? `⏱ TIMED ${secsOf(ex)}s` : "# COUNTED"}
-            </button>
-          </div>
-        )}
-        {!isRest && mode !== "hiit" && (
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#9AA3B0", letterSpacing: 1, width: 42, flexShrink: 0 }}>LEVEL</span>
-            {[["beg", "BEG", "#2FA671"], ["int", "INT", "#4F7DF0"], ["adv", "ADV", "#E8433F"]].map(([lv, label, col]) => {
-              const on = levelOf(ex) === lv;
-              return (
-                <button key={lv} onClick={() => setLevelOv(ex.id, lv)}
-                  style={{ ...S.startBtn, flex: 1, fontSize: 14, padding: "12px 0", background: on ? col : "#EFF1F5", color: on ? "#FFFFFF" : "#6C7686" }}>
-                  {label}
+          <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "10px 12px 12px", boxShadow: "0 1px 3px rgba(27,36,48,0.06)", display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ fontSize: 9, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>ADJUST THIS EXERCISE</div>
+            {!isReady && ex.type === "reps" && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button onClick={() => setCad(ex.id, cadenceOf(ex) + 0.5)}
+                  title="Slow the count down for this exercise"
+                  style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: "#EFF1F5", color: "#6C7686" }}>
+                  🐢 SLOWER
                 </button>
-              );
-            })}
+                <div style={{ fontFamily: DISPLAY, fontSize: 15, fontWeight: 700, color: "#6C7686", minWidth: 58, textAlign: "center" }}>
+                  {cadenceOf(ex)}s/rep
+                </div>
+                <button onClick={() => setCad(ex.id, cadenceOf(ex) - 0.5)}
+                  title="Speed the count up for this exercise"
+                  style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: "#EFF1F5", color: "#6C7686" }}>
+                  🐇 FASTER
+                </button>
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={togglePlayerUni}
+                style={{
+                  ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0",
+                  background: effUni(ex) ? "#DCE7FB" : "#EFF1F5",
+                  color: effUni(ex) ? "#2456B3" : "#6C7686",
+                }}>
+                {effUni(ex) ? "R/L SIDES" : "NO SIDES"}
+              </button>
+              <button onClick={togglePlayerType}
+                title="Tap to switch this exercise between timed and counted"
+                style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: "#EFF1F5", color: "#6C7686" }}>
+                {ex.type === "time" ? `⏱ TIMED ${secsOf(ex)}s` : "# COUNTED"}
+              </button>
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#9AA3B0", letterSpacing: 1, width: 42, flexShrink: 0 }}>LEVEL</span>
+              {[["beg", "BEG", "#2FA671"], ["int", "INT", "#4F7DF0"], ["adv", "ADV", "#E8433F"]].map(([lv, label, col]) => {
+                const on = levelOf(ex) === lv;
+                return (
+                  <button key={lv} onClick={() => setLevelOv(ex.id, lv)}
+                    style={{ ...S.startBtn, flex: 1, fontSize: 14, padding: "12px 0", background: on ? col : "#EFF1F5", color: on ? "#FFFFFF" : "#6C7686" }}>
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
         {!isRest && !isReady && mode !== "hiit" && ex.type === "reps" && (
