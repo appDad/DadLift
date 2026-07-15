@@ -75,15 +75,19 @@ function weightedPick(pool, count, rng, ratings, usedFams) {
   return out;
 }
 
-/* narrow a pool to a difficulty, but per group: if a group has nothing at the
-   chosen level, keep that group's moves so the workout still fills every slot */
+/* difficulty is a CEILING, not an exact match: "advanced" can do everything,
+   "intermediate" includes beginner moves too. Keep exercises at or below the
+   chosen level; per group, if nothing qualifies, keep that group's moves so the
+   workout still fills every slot. */
+const LEVEL_RANK = { beg: 0, int: 1, adv: 2 };
 function filterByLevel(pool, level) {
-  if (level === "all") return pool;
+  const cap = level === "all" ? 2 : (LEVEL_RANK[level] ?? 2);
+  if (cap >= 2) return pool; // advanced = anything goes
   const byGrp = {};
   for (const e of pool) (byGrp[e.grp] = byGrp[e.grp] || []).push(e);
   const out = [];
   for (const g in byGrp) {
-    const m = byGrp[g].filter((e) => levelOf(e) === level);
+    const m = byGrp[g].filter((e) => (LEVEL_RANK[levelOf(e)] ?? 1) <= cap);
     out.push(...(m.length ? m : byGrp[g]));
   }
   return out;
@@ -714,7 +718,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [goEffort, setGoEffort] = useState("steady"); // easy | steady | hard
   const [fullMins, setFullMins] = useState(20); // full-workout time budget
   const [fullEffort, setFullEffort] = useState("steady"); // easy | steady | hard
-  const [workoutLevel, setWorkoutLevel] = useState("all"); // all | beg | int | adv difficulty filter
+  const [workoutLevel, setWorkoutLevel] = useState("adv"); // beg | int | adv — a ceiling (adv = everything)
   const [extEquip, setExtEquip] = useState({}); // admin-added catalog entries (config/equipment)
   const [exOverrides, setExOverrides] = useState({}); // admin exercise property overrides (config/exercises)
   const [typeOver, setTypeOver] = useState({}); // personal counted/timed flips (non-admin users)
@@ -925,7 +929,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         setGoEffort(s.goEffort ?? "steady");
         setFullMins(s.fullMins ?? 20);
         setFullEffort(s.fullEffort ?? "steady");
-        setWorkoutLevel(s.workoutLevel ?? "all");
+        setWorkoutLevel((s.workoutLevel ?? "adv") === "all" ? "adv" : (s.workoutLevel ?? "adv"));
         setEquip(s.equip ?? {});
         // normalize any legacy free-text equipment into catalog keys
         // ownership list; migrate legacy customEquip additions into it
@@ -1832,9 +1836,11 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         )}
 
         <div style={{ padding: "0 16px 12px" }}>
-          <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, marginBottom: 8 }}>DIFFICULTY</div>
+          <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, marginBottom: 8 }}>
+            DIFFICULTY <span style={{ fontWeight: 400, letterSpacing: 0.5 }}>— up to and including</span>
+          </div>
           <div style={{ display: "flex", gap: 8, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
-            {[["all", "ALL LEVELS"], ["beg", "BEGINNER"], ["int", "INTERMEDIATE"], ["adv", "ADVANCED"]].map(([k, label]) => {
+            {[["beg", "BEGINNER"], ["int", "INTERMEDIATE"], ["adv", "ADVANCED"]].map(([k, label]) => {
               const on = workoutLevel === k;
               return (
                 <button key={k} onClick={() => setWorkoutLevel(k)}
