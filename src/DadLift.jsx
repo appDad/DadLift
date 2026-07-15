@@ -10,7 +10,7 @@ import { newShareId, shareUrl, publishSnapshot, removeSnapshot } from "./share";
 import { styles, DISPLAY, FONT_CSS } from "./theme";
 import Stats from "./Stats.jsx";
 import Users from "./Users.jsx";
-import Validate from "./Validate.jsx";
+import Validate, { fetchValidations } from "./Validate.jsx";
 import NavBar from "./Nav.jsx";
 
 /* ============ deterministic daily RNG ============ */
@@ -731,6 +731,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [fullMins, setFullMins] = useState(20); // full-workout time budget
   const [fullEffort, setFullEffort] = useState("steady"); // easy | steady | hard
   const [workoutLevel, setWorkoutLevel] = useState("adv"); // beg | int | adv — a ceiling (adv = everything)
+  const [reviewCount, setReviewCount] = useState(0); // admin: pending Validate items (for the home badge)
   const [extEquip, setExtEquip] = useState({}); // admin-added catalog entries (config/equipment)
   const [exOverrides, setExOverrides] = useState({}); // admin exercise property overrides (config/exercises)
   const [typeOver, setTypeOver] = useState({}); // personal counted/timed flips (non-admin users)
@@ -958,6 +959,15 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     if (!loaded) return;
     saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned, workoutLevel, venue, gymRest }, { debounce: 600 });
   }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned, workoutLevel, venue, gymRest]);
+
+  /* admin: count pending Validate items once after load, for the home badge */
+  useEffect(() => {
+    if (!isAdmin || !loaded) return;
+    let dead = false;
+    fetchValidations(exOverrides).then((l) => { if (!dead) setReviewCount(l.length); }).catch(() => {});
+    return () => { dead = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, loaded]);
 
   /* screen wake lock while working out — counting used to die when the phone locked */
   useEffect(() => {
@@ -1548,7 +1558,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       nav={<NavBar current="users" onNav={setScreen} weighDue={weighDue} />} />;
   }
   if (screen === "validate" && isAdmin) {
-    return <Validate allEx={allEx} exOverrides={exOverrides} onMakeGlobal={setAdminOverride}
+    return <Validate allEx={allEx} exOverrides={exOverrides} onMakeGlobal={setAdminOverride} onCount={setReviewCount}
       nav={<NavBar current="validate" onNav={setScreen} weighDue={weighDue} />} />;
   }
 
@@ -2057,10 +2067,16 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         )}
 
         {isAdmin && (
-          <div style={{ textAlign: "center", padding: "22px 16px 28px", display: "flex", gap: 20, justifyContent: "center" }}>
+          <div style={{ textAlign: "center", padding: "22px 16px 28px", display: "flex", gap: 20, justifyContent: "center", alignItems: "center" }}>
+            {reviewCount > 0 && <style>{`@keyframes reviewGlow{0%,100%{box-shadow:0 0 0 0 rgba(79,125,240,.45)}50%{box-shadow:0 0 9px 3px rgba(79,125,240,.55)}}`}</style>}
             <button onClick={() => setScreen("validate")}
-              style={{ ...S.ghostBtn, fontSize: 13, textDecoration: "underline", color: "#9AA3B0" }}>
+              style={{ ...S.ghostBtn, fontSize: 13, textDecoration: "underline", color: reviewCount > 0 ? "#3559C7" : "#9AA3B0", fontWeight: reviewCount > 0 ? 700 : 400 }}>
               Validate changes
+              {reviewCount > 0 && (
+                <span style={{ marginLeft: 6, background: "#4F7DF0", color: "#FFFFFF", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 700, animation: "reviewGlow 1.8s ease-in-out infinite", textDecoration: "none", display: "inline-block" }}>
+                  {reviewCount}
+                </span>
+              )}
             </button>
             <button onClick={() => setScreen("users")}
               style={{ ...S.ghostBtn, fontSize: 13, textDecoration: "underline", color: "#9AA3B0" }}>

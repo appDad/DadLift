@@ -18,7 +18,47 @@ const keyOf = (s) => {
   return `${s.exId}|${s.prop}|${v}`;
 };
 
-export default function Validate({ allEx, exOverrides, onMakeGlobal, nav }) {
+/* Shared aggregator used by the screen AND the home-screen review badge:
+   reads everyone's tweaks, drops ones already global or discarded, returns the
+   pending suggestion list (sorted by headcount). */
+export async function fetchValidations(exOverrides, dismissedSet) {
+  const dset = dismissedSet || new Set(await loadJSON("validatedismiss", []));
+  const snap = await getDocs(collectionGroup(db, "kv"));
+  const agg = {};
+  const bump = (exId, prop, patch, label, uid) => {
+    const k = `${exId}|${prop}|${label}`;
+    if (!agg[k]) agg[k] = { exId, prop, patch, label, users: new Set() };
+    agg[k].users.add(uid);
+  };
+  snap.forEach((d) => {
+    const uid = d.ref.parent.parent ? d.ref.parent.parent.id : "?";
+    let val; try { val = JSON.parse(d.data().value); } catch (e) { return; }
+    if (!val || typeof val !== "object") return;
+    if (d.id === "levelover") {
+      for (const [id, lv] of Object.entries(val))
+        if (LEVEL_NAME[lv]) bump(id, "level", { level: lv }, LEVEL_NAME[lv], uid);
+    } else if (d.id === "unilateral") {
+      for (const [id, u] of Object.entries(val))
+        bump(id, "uni", { uni: !!u }, u ? "Per side (R/L)" : "No sides", uid);
+    } else if (d.id === "typeover") {
+      for (const [id, t] of Object.entries(val)) {
+        if (!t || !t.type) continue;
+        bump(id, "type", t.type === "time" ? { type: "time", secs: t.secs } : { type: "reps" },
+          t.type === "time" ? `Timed ${t.secs || 40}s` : "Counted", uid);
+      }
+    }
+  });
+  return Object.values(agg)
+    .map((s) => ({ ...s, count: s.users.size }))
+    .filter((s) => {
+      if (dset.has(keyOf(s))) return false;
+      const cur = exOverrides[s.exId] || {};
+      return Object.entries(s.patch).some(([k, v]) => cur[k] !== v);
+    })
+    .sort((a, b) => b.count - a.count);
+}
+
+export default function Validate({ allEx, exOverrides, onMakeGlobal, onCount, nav }) {
   const S = styles;
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
@@ -44,41 +84,8 @@ export default function Validate({ allEx, exOverrides, onMakeGlobal, nav }) {
     (async () => {
       try {
         dismissedRef.current = await loadJSON("validatedismiss", []);
-        const dset = new Set(dismissedRef.current);
-        const snap = await getDocs(collectionGroup(db, "kv"));
-        const agg = {};
-        const bump = (exId, prop, patch, label, uid) => {
-          const k = `${exId}|${prop}|${label}`;
-          if (!agg[k]) agg[k] = { exId, prop, patch, label, users: new Set() };
-          agg[k].users.add(uid);
-        };
-        snap.forEach((d) => {
-          const uid = d.ref.parent.parent ? d.ref.parent.parent.id : "?";
-          let val; try { val = JSON.parse(d.data().value); } catch (e) { return; }
-          if (!val || typeof val !== "object") return;
-          if (d.id === "levelover") {
-            for (const [id, lv] of Object.entries(val))
-              if (LEVEL_NAME[lv]) bump(id, "level", { level: lv }, LEVEL_NAME[lv], uid);
-          } else if (d.id === "unilateral") {
-            for (const [id, u] of Object.entries(val))
-              bump(id, "uni", { uni: !!u }, u ? "Per side (R/L)" : "No sides", uid);
-          } else if (d.id === "typeover") {
-            for (const [id, t] of Object.entries(val)) {
-              if (!t || !t.type) continue;
-              bump(id, "type", t.type === "time" ? { type: "time", secs: t.secs } : { type: "reps" },
-                t.type === "time" ? `Timed ${t.secs || 40}s` : "Counted", uid);
-            }
-          }
-        });
-        // hide anything already matching the global default OR previously discarded
-        const list = Object.values(agg)
-          .map((s) => ({ ...s, count: s.users.size }))
-          .filter((s) => {
-            if (dset.has(keyOf(s))) return false;
-            const cur = exOverrides[s.exId] || {};
-            return Object.entries(s.patch).some(([k, v]) => cur[k] !== v);
-          })
-          .sort((a, b) => b.count - a.count || nameOf(a.exId).localeCompare(nameOf(b.exId)));
+        const list = await fetchValidations(exOverrides, new Set(dismissedRef.current));
+        list.sort((a, b) => b.count - a.count || nameOf(a.exId).localeCompare(nameOf(b.exId)));
         setRows(list);
       } catch (e) {
         setErr(e.message || String(e));
@@ -87,6 +94,9 @@ export default function Validate({ allEx, exOverrides, onMakeGlobal, nav }) {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // keep the home-screen badge in sync as rows are promoted / discarded
+  useEffect(() => { if (rows && onCount) onCount(rows.length); }, [rows, onCount]);
 
   return (
     <div style={S.app}>
