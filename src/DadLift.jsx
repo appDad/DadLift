@@ -443,7 +443,7 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
 }
 
 /* ============ library screen ============ */
-function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, communityBy, onHide, ownedEquip, ownedCount, onSetEq, uniOf, onToggleUni, isAdmin, onToggleType, cadenceOf, onSetCad, onAdminDelete, nav }) {
+function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, communityBy, onHide, ownedEquip, ownedCount, onSetEq, uniOf, onToggleUni, isAdmin, onToggleType, cadenceOf, onSetCad, onSetLevel, onAdminDelete, nav }) {
   const [openId, setOpenId] = useState(null);
   const [tab, setTab] = useState("browse"); // browse | add | export
   const [pasteVal, setPasteVal] = useState("");
@@ -585,6 +585,17 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, comm
                               <button onClick={() => onSetCad(e.id, cadenceOf(e) - 0.5)} style={{ border: "none", background: "#FFFFFF", borderRadius: 999, width: 24, height: 24, cursor: "pointer", fontSize: 13 }}>+</button>
                             </div>
                           )}
+                          <div style={{ display: "inline-flex", gap: 3, background: "#EFF1F5", borderRadius: 999, padding: 3 }}>
+                            {[["beg", "BEG", "#2FA671"], ["int", "INT", "#4F7DF0"], ["adv", "ADV", "#E8433F"]].map(([lv, ltr, col]) => {
+                              const on = levelOf(e) === lv;
+                              return (
+                                <button key={lv} onClick={() => onSetLevel(e.id, lv)}
+                                  style={{ border: "none", cursor: "pointer", borderRadius: 999, padding: "4px 9px", fontSize: 10, fontWeight: 700, letterSpacing: 0.5, background: on ? col : "transparent", color: on ? "#FFFFFF" : "#9AA3B0" }}>
+                                  {ltr}
+                                </button>
+                              );
+                            })}
+                          </div>
                           {isCustom && (
                             <select value={e.eq || ""} onChange={(ev) => onSetEq(e.id, ev.target.value || null)}
                               style={{ border: "1px solid #DDE2E9", borderRadius: 8, background: "#EFF1F5", color: "#3D4756", fontSize: 12, padding: "6px 8px" }}>
@@ -722,6 +733,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [extEquip, setExtEquip] = useState({}); // admin-added catalog entries (config/equipment)
   const [exOverrides, setExOverrides] = useState({}); // admin exercise property overrides (config/exercises)
   const [typeOver, setTypeOver] = useState({}); // personal counted/timed flips (non-admin users)
+  const [levelOver, setLevelOver] = useState({}); // personal difficulty overrides (per user, never global)
   const [shuffleN, setShuffleN] = useState(0); // today's reshuffle count — new seed each press
   const [excluded, setExcluded] = useState([]); // exercises thumbed out of TODAY'S workout
   const savedRef = useRef(false);
@@ -752,12 +764,13 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       let out = e;
       if (a) out = { ...out, ...a };
       if (p) out = { ...out, ...p };
+      if (levelOver[e.id]) out = { ...out, level: levelOver[e.id] }; // personal difficulty override
       return out;
     };
     return [...BUILTIN, ...comm.map(tagEq), ...customEx.map(tagEq)]
       .map(applyOverride)
       .filter((e) => !e.hidden); // admin-hidden built-ins disappear for everyone
-  }, [customEx, community, hiddenComm, extEquip, exOverrides, typeOver]);
+  }, [customEx, community, hiddenComm, extEquip, exOverrides, typeOver, levelOver]);
   const communityBy = useMemo(
     () => Object.fromEntries(community.map((c) => [c.ex.id, c.by])),
     [community]
@@ -872,6 +885,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       const ov = await loadExOverrides();
       setExOverrides(ov);
       setTypeOver(await loadJSON("typeover", {}));
+      setLevelOver(await loadJSON("levelover", {}));
       // per-day workout tweaks: reshuffle count + thumbed-out exercises
       const tweaks = await loadJSON("daytweaks", null);
       if (tweaks && tweaks.d === ymd(today)) {
@@ -978,6 +992,12 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     if (Math.abs(v - tempo) < 0.001) delete next[id]; // matches default — drop it
     setCadence(next);
     saveJSON("cadence", next);
+  };
+  /* personal difficulty override — always per-user, never global (even for admin) */
+  const setLevelOv = (id, lv) => {
+    const next = { ...levelOver, [id]: lv };
+    setLevelOver(next);
+    saveJSON("levelover", next);
   };
 
   /* two-pass (per-side) control. Precedence: my personal override, then the
@@ -1493,7 +1513,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       ownedEquip={equipKeys.filter(haveEquip)} ownedCount={owned.length} onSetEq={setCustomEq}
       uniOf={effUni} onToggleUni={toggleUni}
       isAdmin={isAdmin} onToggleType={toggleType}
-      cadenceOf={cadenceOf} onSetCad={setCad} onAdminDelete={adminDeleteExercise}
+      cadenceOf={cadenceOf} onSetCad={setCad} onSetLevel={setLevelOv} onAdminDelete={adminDeleteExercise}
       nav={<NavBar current="library" onNav={setScreen} weighDue={weighDue} />}
       onBack={() => setScreen("home")} />;
   }
@@ -1928,6 +1948,17 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                             <button onClick={() => setCad(e.id, cadenceOf(e) - 0.5)} style={{ border: "none", background: "#FFFFFF", borderRadius: 999, width: 24, height: 24, cursor: "pointer", fontSize: 13, lineHeight: 1 }}>+</button>
                           </div>
                         )}
+                        <div onClick={(ev) => ev.stopPropagation()} style={{ display: "inline-flex", gap: 3, background: "#EFF1F5", borderRadius: 999, padding: 3 }}>
+                          {[["beg", "BEG", "#2FA671"], ["int", "INT", "#4F7DF0"], ["adv", "ADV", "#E8433F"]].map(([lv, ltr, col]) => {
+                            const on = levelOf(e) === lv;
+                            return (
+                              <button key={lv} onClick={() => setLevelOv(e.id, lv)}
+                                style={{ border: "none", cursor: "pointer", borderRadius: 999, padding: "4px 9px", fontSize: 10, fontWeight: 700, letterSpacing: 0.5, background: on ? col : "transparent", color: on ? "#FFFFFF" : "#9AA3B0" }}>
+                                {ltr}
+                              </button>
+                            );
+                          })}
+                        </div>
                         <div style={{ flex: 1 }} />
                         <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                           <button onClick={(ev) => { ev.stopPropagation(); rate(e.id, ratings[e.id] === 1 ? 0 : 1); }}
