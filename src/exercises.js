@@ -241,6 +241,23 @@ export const POSES = {
     { L: [[36, 62, 62, 64], [62, 64, 58, 84], [62, 64, 66, 84], [36, 62, 34, 84], [36, 62, 40, 74]], head: [32, 59], db: [[40, 84, 0]], floor: true },
     { L: [[36, 62, 62, 64], [62, 64, 58, 84], [62, 64, 66, 84], [36, 62, 34, 84], [36, 62, 42, 60]], head: [32, 59], db: [[43, 58, 0]], floor: true },
   ],
+  /* ---- gym-gear additions ---- */
+  abRollout: [
+    { L: [[48, 84, 36, 84], [48, 84, 46, 70], [46, 70, 44, 58], [44, 58, 56, 80]], head: [41, 54], ball: [[58, 84, 5]], floor: true },
+    { L: [[48, 84, 36, 84], [48, 84, 42, 78], [42, 78, 24, 82], [24, 82, 12, 84]], head: [20, 79], ball: [[8, 85, 5]], floor: true },
+  ],
+  pullup: [
+    { L: [[33, 9, 67, 9], [43, 9, 50, 28], [57, 9, 50, 28], [50, 28, 50, 58], [50, 58, 47, 80], [50, 58, 53, 80]], head: [50, 23] },
+    { L: [[33, 9, 67, 9], [43, 9, 45, 19], [45, 19, 50, 16], [57, 9, 55, 19], [55, 19, 50, 16], [50, 18, 50, 46], [50, 46, 47, 68], [50, 46, 53, 68]], head: [50, 12] },
+  ],
+  hangingRaise: [
+    { L: [[33, 9, 67, 9], [43, 9, 49, 28], [57, 9, 51, 28], [50, 28, 50, 56], [50, 56, 50, 80]], head: [50, 23] },
+    { L: [[33, 9, 67, 9], [43, 9, 49, 28], [57, 9, 51, 28], [50, 28, 50, 54], [50, 54, 60, 54], [60, 54, 60, 66]], head: [50, 23] },
+  ],
+  jumpRope: [
+    { L: [...TORSO, ...STAND_LEGS, [50, 28, 44, 42], [50, 28, 56, 42]], head: [50, 14], floor: true },
+    { L: [[50, 18, 50, 48], [50, 48, 45, 60], [45, 60, 46, 78], [50, 48, 55, 60], [55, 60, 54, 78], [50, 24, 43, 40], [50, 24, 57, 40]], head: [50, 12], floor: true },
+  ],
 };
 
 /* ============ built-in exercise database ============ */
@@ -355,6 +372,47 @@ export const BUILTIN = [
   { id: "mcp", grp: "chest", name: "Chest Press Machine", type: "reps", eq: "machine", fam: "chestpress", level: "beg", cad: 3, pose: "benchPress", cue: "Handles at mid-chest, back flat on the pad. Press forward to near lockout, squeeze your chest, then return slow until you feel a stretch." },
   { id: "msp", grp: "shoulders", name: "Shoulder Press Machine", type: "reps", eq: "machine", fam: "press", level: "beg", cad: 3, pose: "ohp", cue: "Handles at shoulder height, back against the pad. Press straight up to near lockout, then lower slow to the start." },
   { id: "mpd", grp: "chest", name: "Pec Deck", type: "reps", eq: "machine", fam: "chestpress", level: "beg", cad: 2, pose: "fly", cue: "Forearms or handles on the pads. Bring them together in front of your chest, squeeze hard, then open slow with control." },
+  /* ---- ab wheel ---- */
+  { id: "abw", grp: "core", name: "Ab Wheel Rollout", type: "reps", eq: "abwheel", fam: "plank", level: "adv", cad: 4, pose: "abRollout", cue: "Kneel with the wheel under your shoulders. Brace your core and roll it forward as far as you can control without letting your hips sag, then pull back. Start from your knees." },
+  { id: "abwo", grp: "core", name: "Ab Wheel Oblique Rollout", type: "reps", eq: "abwheel", fam: "plank", level: "adv", uni: true, cad: 4, pose: "abRollout", cue: "Kneel and roll the wheel out at an angle toward one side, hitting the obliques, then pull back. Keep your hips square. Count is per side." },
+  /* ---- pull-up bar ---- */
+  { id: "plu", grp: "back", name: "Pull-Up", type: "reps", eq: "pullup", fam: "pulldown", level: "adv", cad: 3, pose: "pullup", cue: "Hang from the bar with an overhand grip. Pull your chest to the bar by driving your elbows down, then lower all the way under control." },
+  { id: "chu", grp: "arms", name: "Chin-Up", type: "reps", eq: "pullup", fam: "pulldown", level: "adv", cad: 3, pose: "pullup", cue: "Hang with an underhand shoulder-width grip. Pull up until your chin clears the bar, squeezing your biceps, then lower slow." },
+  { id: "hlr", grp: "core", name: "Hanging Knee Raise", type: "reps", eq: "pullup", fam: "crunch", level: "int", cad: 3, pose: "hangingRaise", cue: "Hang from the bar, shoulders active. Raise your knees toward your chest by curling your pelvis up, pause, then lower slow without swinging." },
+  { id: "dhg", grp: "back", name: "Dead Hang", type: "time", secs: 30, eq: "pullup", level: "beg", pose: "pullup", cue: "Hang from the bar with straight arms, shoulders slightly engaged. Relax and breathe. Great for grip and decompressing your spine." },
+  /* ---- kettlebell ---- */
+  { id: "kbsw", grp: "legs", name: "Kettlebell Swing", type: "reps", eq: "kb", fam: "hinge", level: "int", cad: 2, pose: "swing", cue: "Kettlebell between your feet. Hinge at the hips, hike it back, then snap your hips forward to float it to chest height. Power from the hips, not the arms." },
+  { id: "kbg", grp: "legs", name: "Goblet Squat", type: "reps", eq: "kb", fam: "squat", level: "beg", cad: 3, pose: "sumoSquat", cue: "Hold the kettlebell at your chest with both hands. Squat down between your hips keeping your chest tall, then drive up through your heels." },
+  { id: "kbcp", grp: "shoulders", name: "Kettlebell Clean & Press", type: "reps", eq: "kb", fam: "press", level: "adv", uni: true, cad: 3, pose: "thruster", cue: "Clean the kettlebell to the rack at your shoulder, then press it overhead to lockout and lower back down. Count is per side." },
+  { id: "kbdl", grp: "back", name: "Kettlebell Deadlift", type: "reps", eq: "kb", fam: "hinge", level: "beg", cad: 3, pose: "rdl", cue: "Kettlebell between your feet. Hinge down with a flat back, grip the handle, then stand up tall by pushing the floor away." },
+  { id: "kbrw", grp: "back", name: "Kettlebell Row", type: "reps", eq: "kb", fam: "row", level: "int", uni: true, cad: 3, pose: "row", cue: "Hinge forward, one hand braced. Row the kettlebell to your hip, driving your elbow back and squeezing your lat. Count is per side." },
+  /* ---- resistance bands ---- */
+  { id: "bdpa", grp: "shoulders", name: "Band Pull-Apart", type: "reps", eq: "bands", fam: "raise", level: "beg", cad: 2, pose: "revFly", cue: "Hold the band in front of you at shoulder height. Pull it apart to your chest by squeezing your shoulder blades, then return slow." },
+  { id: "bdsq", grp: "legs", name: "Banded Squat", type: "reps", eq: "bands", fam: "squat", level: "beg", cad: 3, pose: "sumoSquat", cue: "Stand on the band, handles at your shoulders. Squat down, then drive up against the band's resistance. Knees track over your toes." },
+  { id: "bdrw", grp: "back", name: "Band Row", type: "reps", eq: "bands", fam: "row", level: "beg", cad: 2, pose: "row", cue: "Anchor the band in front of you. Pull the handles to your ribs, squeezing your shoulder blades, then reach forward under control." },
+  { id: "bdcl", grp: "arms", name: "Band Bicep Curl", type: "reps", eq: "bands", fam: "curl", level: "beg", cad: 2, pose: "curl", cue: "Stand on the band, elbows pinned to your sides. Curl the handles up, squeeze, then lower slow against the tension." },
+  { id: "bdpr", grp: "shoulders", name: "Band Overhead Press", type: "reps", eq: "bands", fam: "press", level: "beg", cad: 2, pose: "ohp", cue: "Stand on the band, handles at your shoulders. Press straight overhead to lockout, then lower back to your shoulders slow." },
+  /* ---- sliders ---- */
+  { id: "slmc", grp: "core", name: "Slider Mountain Climber", type: "time", secs: 40, eq: "sliders", fam: "plank", level: "int", pose: "mtnClimber", cue: "Plank with a slider under each foot. Drive one knee toward your chest and glide it back, alternating smoothly. Keep your hips low and steady." },
+  { id: "slpk", grp: "core", name: "Slider Pike", type: "reps", eq: "sliders", fam: "plank", level: "adv", cad: 3, pose: "pikePushup", cue: "Plank with sliders under your feet. Keeping your legs straight, pull your feet in toward your hands to pike your hips up, then slide back out." },
+  { id: "sllg", grp: "legs", name: "Slider Reverse Lunge", type: "reps", eq: "sliders", fam: "lunge", level: "int", uni: true, cad: 3, pose: "bulgarianLunge", cue: "Slider under one foot. Slide it straight back into a lunge, bending your front knee, then pull it back to standing. Count is per side." },
+  { id: "slhc", grp: "legs", name: "Slider Hamstring Curl", type: "reps", eq: "sliders", fam: "glute", level: "int", cad: 3, pose: "gluteBridge", cue: "Lie on your back, heels on sliders, hips lifted. Slide your feet out straight, then pull them back in with your hamstrings, keeping your hips up." },
+  /* ---- sandbag ---- */
+  { id: "sgcl", grp: "legs", name: "Sandbag Clean", type: "reps", eq: "sandbag", fam: "hinge", level: "adv", cad: 3, pose: "thruster", cue: "Sandbag on the floor between your feet. Hinge and grip it, then explosively stand and pull it up to your chest in one motion. Lower under control." },
+  { id: "sgsq", grp: "legs", name: "Sandbag Squat", type: "reps", eq: "sandbag", fam: "squat", level: "int", cad: 3, pose: "sumoSquat", cue: "Hold the sandbag against your chest or on your shoulders. Squat down to at least parallel, then drive up through your whole foot." },
+  { id: "sgpr", grp: "shoulders", name: "Sandbag Shoulder Press", type: "reps", eq: "sandbag", fam: "press", level: "int", cad: 3, pose: "ohp", cue: "Hug the sandbag at your chest. Press it overhead to lockout, then lower it back to your chest under control." },
+  /* ---- weight plate ---- */
+  { id: "plfr", grp: "shoulders", name: "Plate Front Raise", type: "reps", eq: "plate", fam: "raise", level: "beg", cad: 2, pose: "frontRaise", cue: "Hold a plate at 3 and 9 o'clock in front of your thighs. Raise it to shoulder height with straight arms, pause, then lower slow." },
+  { id: "plwc", grp: "core", name: "Plate Woodchop", type: "reps", eq: "plate", level: "int", uni: true, cad: 2, pose: "woodChop", cue: "Hold a plate with both hands. Sweep it diagonally from low by one hip up to overhead on the opposite side, rotating through your trunk. Count is per side." },
+  { id: "plsq", grp: "legs", name: "Plate Goblet Squat", type: "reps", eq: "plate", fam: "squat", level: "beg", cad: 3, pose: "sumoSquat", cue: "Hold a plate at your chest with both hands. Squat down keeping your chest tall, then drive up through your heels." },
+  { id: "plhl", grp: "shoulders", name: "Plate Halo", type: "reps", eq: "plate", level: "beg", uni: true, cad: 3, pose: "halo", cue: "Hold a plate at your chest. Circle it around your head, keeping it close, elbows tight. Count is per direction — do both ways." },
+  /* ---- jump rope ---- */
+  { id: "jrp", grp: "legs", name: "Jump Rope", type: "time", secs: 40, eq: "jumprope", level: "beg", pose: "jumpRope", cue: "Small, quick bounces on the balls of your feet, turning the rope from your wrists. Stay light and land soft. Great conditioning." },
+  /* ---- suspension trainer (TRX) ---- */
+  { id: "txrw", grp: "back", name: "TRX Row", type: "reps", eq: "trx", fam: "row", level: "int", cad: 3, pose: "row", cue: "Lean back holding the handles, body straight and heels planted. Pull your chest to your hands, squeezing your shoulder blades, then lower slow. Walk your feet forward to make it harder." },
+  { id: "txpr", grp: "chest", name: "TRX Chest Press", type: "reps", eq: "trx", fam: "chestpress", level: "int", cad: 3, pose: "pushup", cue: "Face away, handles at chest, body angled forward and straight. Lower your chest between the handles, then press back to a plank line. Steeper is harder." },
+  { id: "txsq", grp: "legs", name: "TRX Squat", type: "reps", eq: "trx", fam: "squat", level: "beg", cad: 3, pose: "sumoSquat", cue: "Hold the handles for light support. Sit back into a full squat keeping your chest tall, then drive up through your heels." },
+  { id: "txfl", grp: "core", name: "TRX Fallout", type: "reps", eq: "trx", fam: "plank", level: "adv", cad: 4, pose: "abRollout", cue: "Handles in front, arms straight, body angled forward in a plank line. Reach your arms overhead letting your body fall forward, then pull back with your core. Brace hard." },
 ];
 
 /* equipment tags: "db" dumbbells, "ball" med ball, untagged = bodyweight only */
