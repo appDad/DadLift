@@ -25,6 +25,13 @@ service cloud.firestore {
       allow read, write: if isAllowed() && request.auth.uid == uid;
     }
 
+    // Admin (head validator) may READ everyone's kv docs via a collection-group
+    // query, to review personal exercise tweaks and promote them to global.
+    // Users still only write their own (covered by the rule above).
+    match /{path=**}/kv/{key} {
+      allow read: if isAdmin();
+    }
+
     // Shared exercise pool. Anyone on the roster can read and contribute;
     // only the original contributor or the admin can overwrite or delete.
     match /community/{exId} {

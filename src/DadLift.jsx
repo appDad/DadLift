@@ -10,6 +10,7 @@ import { newShareId, shareUrl, publishSnapshot, removeSnapshot } from "./share";
 import { styles, DISPLAY, FONT_CSS } from "./theme";
 import Stats from "./Stats.jsx";
 import Users from "./Users.jsx";
+import Validate from "./Validate.jsx";
 import NavBar from "./Nav.jsx";
 
 /* ============ deterministic daily RNG ============ */
@@ -1556,6 +1557,10 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     return <Users onBack={() => setScreen("home")}
       nav={<NavBar current="users" onNav={setScreen} weighDue={weighDue} />} />;
   }
+  if (screen === "validate" && isAdmin) {
+    return <Validate allEx={allEx} exOverrides={exOverrides} onMakeGlobal={setAdminOverride}
+      nav={<NavBar current="validate" onNav={setScreen} weighDue={weighDue} />} />;
+  }
 
   /* ---------- WEIGH-IN ---------- */
   if (screen === "weigh") {
@@ -2062,7 +2067,11 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         )}
 
         {isAdmin && (
-          <div style={{ textAlign: "center", padding: "22px 16px 28px" }}>
+          <div style={{ textAlign: "center", padding: "22px 16px 28px", display: "flex", gap: 20, justifyContent: "center" }}>
+            <button onClick={() => setScreen("validate")}
+              style={{ ...S.ghostBtn, fontSize: 13, textDecoration: "underline", color: "#9AA3B0" }}>
+              Validate changes
+            </button>
             <button onClick={() => setScreen("users")}
               style={{ ...S.ghostBtn, fontSize: 13, textDecoration: "underline", color: "#9AA3B0" }}>
               Manage users
