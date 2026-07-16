@@ -310,7 +310,7 @@ function Stepper({ label, value, unit, min, max, step, onChange }) {
   );
 }
 
-function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, gymRest, setGymRest, hiit, setHiit, voiceOn, setVoiceOn, focusPct, setFocusPct, readySecs, setReadySecs, owned, onToggleOwned, focusEquip, isAdmin, extEquip, onAddCatalog, onRemoveCatalog, onClearHistory, onBack, userEmail, onSignOut, nav, exerciseControls, inWorkout }) {
+function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, gymRest, setGymRest, hiit, setHiit, voiceOn, setVoiceOn, focusPct, setFocusPct, readySecs, setReadySecs, owned, onToggleOwned, focusEquip, isAdmin, extEquip, onAddCatalog, onRemoveCatalog, onClearHistory, onBack, userEmail, onSignOut, nav, exerciseControls, inWorkout, venue, mode }) {
   const S = styles;
   const [armClear, setArmClear] = useState(false); // two-tap confirm for the destructive bit
   const [catLabel, setCatLabel] = useState("");
@@ -329,6 +329,11 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px" }}>
         {exerciseControls}
+        {inWorkout && (
+          <div style={{ textAlign: "center", fontSize: 11, letterSpacing: 0.5, color: "#9AA3B0", padding: "2px 0 4px" }}>
+            — everything below applies to all your workouts —
+          </div>
+        )}
         <div style={S.settingsLabel}>FOCUS</div>
         <div style={{ fontSize: 12, color: "#6C7686", lineHeight: 1.5, marginTop: -2 }}>
           When you pick a focus muscle group on the home screen, this is how much of the workout goes to it. <b>100% = only that group.</b>
@@ -337,17 +342,23 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
         <div style={S.settingsLabel}>PACING</div>
         <Stepper label="Rep cadence" value={tempo} unit="s" min={1} max={6} step={0.5} onChange={setTempo} />
         <Stepper label="Get-set countdown before each set" value={readySecs} unit="s" min={0} max={20} step={5} onChange={setReadySecs} />
-        <div style={S.settingsLabel}>🏠 HOME — BREAKS</div>
-        <Stepper label="Rest between exercises" value={restSecs} unit="s" min={5} max={60} step={5} onChange={setRestSecs} />
-        <Stepper label="Rest between rounds" value={roundRest} unit="s" min={15} max={180} step={15} onChange={setRoundRest} />
-        <div style={S.settingsLabel}>🏋 GYM — BREAKS</div>
-        <div style={{ fontSize: 12, color: "#6C7686", lineHeight: 1.5, marginTop: -2 }}>
-          Gym breaks are self-paced — this is just the suggested countdown; the workout waits until you tap "ready" at the next station.
-        </div>
-        <Stepper label="Transition between stations" value={gymRest} unit="s" min={30} max={180} step={15} onChange={setGymRest} />
-        <div style={S.settingsLabel}>HIIT MODE</div>
-        <Stepper label="Work interval" value={hiit[0]} unit="s" min={10} max={90} step={5} onChange={(v) => setHiit([v, hiit[1]])} />
-        <Stepper label="Rest interval" value={hiit[1]} unit="s" min={5} max={60} step={5} onChange={(v) => setHiit([hiit[0], v])} />
+        {(!inWorkout || venue === "home") && (<>
+          <div style={S.settingsLabel}>🏠 HOME — BREAKS</div>
+          <Stepper label="Rest between exercises" value={restSecs} unit="s" min={5} max={60} step={5} onChange={setRestSecs} />
+          <Stepper label="Rest between rounds" value={roundRest} unit="s" min={15} max={180} step={15} onChange={setRoundRest} />
+        </>)}
+        {(!inWorkout || venue === "gym") && (<>
+          <div style={S.settingsLabel}>🏋 GYM — BREAKS</div>
+          <div style={{ fontSize: 12, color: "#6C7686", lineHeight: 1.5, marginTop: -2 }}>
+            Gym breaks are self-paced — this is just the suggested countdown; the workout waits until you tap "ready" at the next station.
+          </div>
+          <Stepper label="Transition between stations" value={gymRest} unit="s" min={30} max={180} step={15} onChange={setGymRest} />
+        </>)}
+        {(!inWorkout || mode === "hiit") && (<>
+          <div style={S.settingsLabel}>HIIT MODE</div>
+          <Stepper label="Work interval" value={hiit[0]} unit="s" min={10} max={90} step={5} onChange={(v) => setHiit([v, hiit[1]])} />
+          <Stepper label="Rest interval" value={hiit[1]} unit="s" min={5} max={60} step={5} onChange={(v) => setHiit([hiit[0], v])} />
+        </>)}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", borderRadius: 12, padding: "12px 14px" }}>
           <div style={{ fontSize: 14, color: "#3D4756" }}>Voice (rep counting + announcements)</div>
           <button onClick={() => setVoiceOn(!voiceOn)}
@@ -1552,7 +1563,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   // shared so Settings can render both as its own screen AND as the in-workout popup
   const settingsProps = {
     tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, gymRest, setGymRest, hiit, setHiit,
-    voiceOn, setVoiceOn, focusPct, setFocusPct, readySecs, setReadySecs,
+    voiceOn, setVoiceOn, focusPct, setFocusPct, readySecs, setReadySecs, venue, mode,
     owned, onToggleOwned: toggleOwned, focusEquip: settingsFocus === "equip",
     isAdmin, extEquip, onAddCatalog: addCatalogEquip, onRemoveCatalog: removeCatalogEquip,
     onClearHistory: clearHistory, userEmail: user.email, onSignOut,
@@ -2164,42 +2175,53 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       ? readySecs
       : (mode === "hiit" ? hiit[0] : ex.type === "time" ? secsOf(ex) : 0);
 
-  // the current exercise's tweaks — now lives inside the pause-and-adjust popup
+  // the current exercise's tweaks — spacious card at the top of the adjust popup,
+  // clearly marked (colored accent + name) as affecting ONLY this exercise
+  const subLbl = { fontSize: 10, letterSpacing: 1, color: "#6C7686", fontWeight: 700, marginBottom: 7 };
+  const exBtn = { ...S.startBtn, fontSize: 14, padding: "15px 0" };
   const exerciseAdjustCard = mode !== "hiit" ? (
-    <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px rgba(27,36,48,0.06)", display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ fontSize: 9, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>
-        THIS EXERCISE — <span style={{ color: g.color }}>{ex.name.toUpperCase()}</span>
+    <div style={{ background: "#FFFFFF", borderRadius: 14, padding: "14px 16px 18px", boxShadow: "0 2px 8px rgba(27,36,48,0.08)", borderTop: `4px solid ${g.color}`, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div>
+        <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>ADJUSTING JUST THIS EXERCISE</div>
+        <div style={{ fontFamily: DISPLAY, fontSize: 24, fontWeight: 700, color: g.color, marginTop: 3, lineHeight: 1.1 }}>{ex.name}</div>
       </div>
       {ex.type === "reps" && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button onClick={() => setCad(ex.id, cadenceOf(ex) + 0.5)}
-            style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: "#EFF1F5", color: "#6C7686" }}>🐢 SLOWER</button>
-          <div style={{ fontFamily: DISPLAY, fontSize: 15, fontWeight: 700, color: "#6C7686", minWidth: 58, textAlign: "center" }}>{cadenceOf(ex)}s/rep</div>
-          <button onClick={() => setCad(ex.id, cadenceOf(ex) - 0.5)}
-            style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: "#EFF1F5", color: "#6C7686" }}>🐇 FASTER</button>
+        <div>
+          <div style={subLbl}>REP SPEED</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={() => setCad(ex.id, cadenceOf(ex) + 0.5)} style={{ ...exBtn, flex: 1, background: "#EFF1F5", color: "#3D4756" }}>🐢 SLOWER</button>
+            <div style={{ fontFamily: DISPLAY, fontSize: 18, fontWeight: 700, color: "#1B2430", minWidth: 66, textAlign: "center" }}>{cadenceOf(ex)}s/rep</div>
+            <button onClick={() => setCad(ex.id, cadenceOf(ex) - 0.5)} style={{ ...exBtn, flex: 1, background: "#EFF1F5", color: "#3D4756" }}>🐇 FASTER</button>
+          </div>
         </div>
       )}
-      <div style={{ display: "flex", gap: 8 }}>
+      <div>
+        <div style={subLbl}>SIDES</div>
         <button onClick={togglePlayerUni}
-          style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: effUni(ex) ? "#DCE7FB" : "#EFF1F5", color: effUni(ex) ? "#2456B3" : "#6C7686" }}>
-          {effUni(ex) ? "R/L SIDES" : "NO SIDES"}
-        </button>
-        <button onClick={togglePlayerType}
-          style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: "#EFF1F5", color: "#6C7686" }}>
-          {ex.type === "time" ? `⏱ TIMED ${secsOf(ex)}s` : "# COUNTED"}
+          style={{ ...exBtn, width: "100%", background: effUni(ex) ? "#DCE7FB" : "#EFF1F5", color: effUni(ex) ? "#2456B3" : "#3D4756" }}>
+          {effUni(ex) ? "R/L — WORK EACH SIDE SEPARATELY" : "NO SIDES — BOTH AT ONCE"}
         </button>
       </div>
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "#9AA3B0", letterSpacing: 1, width: 42, flexShrink: 0 }}>LEVEL</span>
-        {[["beg", "BEG", "#2FA671"], ["int", "INT", "#4F7DF0"], ["adv", "ADV", "#E8433F"]].map(([lv, label, col]) => {
-          const on = levelOf(ex) === lv;
-          return (
-            <button key={lv} onClick={() => setLevelOv(ex.id, lv)}
-              style={{ ...S.startBtn, flex: 1, fontSize: 14, padding: "12px 0", background: on ? col : "#EFF1F5", color: on ? "#FFFFFF" : "#6C7686" }}>
-              {label}
-            </button>
-          );
-        })}
+      <div>
+        <div style={subLbl}>COUNT AS</div>
+        <button onClick={togglePlayerType}
+          style={{ ...exBtn, width: "100%", background: "#EFF1F5", color: "#3D4756" }}>
+          {ex.type === "time" ? `⏱ TIMED — ${secsOf(ex)}s HOLD` : "# COUNTED REPS"}
+        </button>
+      </div>
+      <div>
+        <div style={subLbl}>DIFFICULTY</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          {[["beg", "BEG", "#2FA671"], ["int", "INT", "#4F7DF0"], ["adv", "ADV", "#E8433F"]].map(([lv, label, col]) => {
+            const on = levelOf(ex) === lv;
+            return (
+              <button key={lv} onClick={() => setLevelOv(ex.id, lv)}
+                style={{ ...exBtn, flex: 1, background: on ? col : "#EFF1F5", color: on ? "#FFFFFF" : "#3D4756" }}>
+                {label}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   ) : null;
