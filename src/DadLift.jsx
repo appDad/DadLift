@@ -687,6 +687,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [sessionRounds, setSessionRounds] = useState(2); // rounds for the RUNNING session (quick = 1)
   const [quickEx, setQuickEx] = useState(null); // active do-anywhere list, null = today's workout (also the "is burn" flag)
   const [sessionIds, setSessionIds] = useState(null); // frozen MEMBERSHIP (ids) for the running session; objects stay live so edits still show
+  const [settingsModal, setSettingsModal] = useState(false); // full settings shown as a popup over the paused player
   const [phase, setPhase] = useState("work"); // work | rest | ready (get-set countdown, circuit only)
   const [timeLeft, setTimeLeft] = useState(0);
   const [rep, setRep] = useState(0);
@@ -1541,6 +1542,15 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const streak = calcStreak(history);
   const week = thisWeekCount(history); // current Sunday-started calendar week
 
+  // shared so Settings can render both as its own screen AND as the in-workout popup
+  const settingsProps = {
+    tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit,
+    voiceOn, setVoiceOn, focusPct, setFocusPct, readySecs, setReadySecs,
+    owned, onToggleOwned: toggleOwned, focusEquip: settingsFocus === "equip",
+    isAdmin, extEquip, onAddCatalog: addCatalogEquip, onRemoveCatalog: removeCatalogEquip,
+    onClearHistory: clearHistory, userEmail: user.email, onSignOut,
+  };
+
   if (screen === "library") {
     return <Library allEx={allEx} custom={customEx} onAdd={addCustom} onRemove={removeCustom}
       ratings={ratings} onRate={rate} communityBy={communityBy} onHide={hideCommunity}
@@ -1552,17 +1562,9 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       onBack={() => setScreen("home")} />;
   }
   if (screen === "settings") {
-    return <Settings tempo={tempo} setTempo={setTempo} restSecs={restSecs} setRestSecs={setRestSecs}
-      roundRest={roundRest} setRoundRest={setRoundRest} hiit={hiit} setHiit={setHiit}
-      voiceOn={voiceOn} setVoiceOn={setVoiceOn}
-      focusPct={focusPct} setFocusPct={setFocusPct}
-      readySecs={readySecs} setReadySecs={setReadySecs}
-      owned={owned} onToggleOwned={toggleOwned}
-      focusEquip={settingsFocus === "equip"}
-      isAdmin={isAdmin} extEquip={extEquip} onAddCatalog={addCatalogEquip} onRemoveCatalog={removeCatalogEquip}
-      onClearHistory={clearHistory} onBack={() => { setSettingsFocus(null); setScreen("home"); }}
-      nav={<NavBar current="settings" onNav={setScreen} weighDue={weighDue} />}
-      userEmail={user.email} onSignOut={onSignOut} />;
+    return <Settings {...settingsProps}
+      onBack={() => { setSettingsFocus(null); setScreen("home"); }}
+      nav={<NavBar current="settings" onNav={setScreen} weighDue={weighDue} />} />;
   }
   if (screen === "stats") {
     return <Stats history={history} onBack={() => setScreen("home")}
@@ -2295,6 +2297,10 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                 );
               })}
             </div>
+            <button onClick={() => { setPaused(true); setSettingsModal(true); }}
+              style={{ border: "none", background: "none", color: "#4F7DF0", fontSize: 12, fontWeight: 600, cursor: "pointer", textDecoration: "underline", alignSelf: "center", marginTop: 2 }}>
+              Cadence or timing not right? Change all settings →
+            </button>
           </div>
         )}
         {!isRest && !isReady && mode !== "hiit" && ex.type === "reps" && (
@@ -2313,6 +2319,22 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           </div>
         )}
       </div>
+
+      {settingsModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, overflowY: "auto", background: "rgba(15,20,30,0.5)" }}>
+          <Settings {...settingsProps}
+            onBack={() => { setSettingsModal(false); setPaused(false); }}
+            nav={
+              <div style={{ position: "sticky", top: 0, zIndex: 20, background: "#1B2430", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px" }}>
+                <span style={{ color: "#F5F6F8", fontFamily: DISPLAY, fontWeight: 700, letterSpacing: 1, fontSize: 15 }}>⏸ WORKOUT PAUSED</span>
+                <button onClick={() => { setSettingsModal(false); setPaused(false); }}
+                  style={{ ...S.pill, background: "#2FA671", color: "#FFFFFF", fontWeight: 700 }}>
+                  ✓ BACK TO WORKOUT
+                </button>
+              </div>
+            } />
+        </div>
+      )}
     </div>
   );
 }
