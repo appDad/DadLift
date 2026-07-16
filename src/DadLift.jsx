@@ -94,11 +94,11 @@ function filterByLevel(pool, level) {
   return out;
 }
 
-function buildWorkout(date, allEx, emphasis, ratings = {}, nonce = 0, slots = 8) {
+function buildWorkout(date, allEx, emphasis, ratings = {}, nonce = 0, slots = 8, focusPct = 50) {
   const rng = mulberry32(dateSeed(date) + nonce * 131071); // reshuffles re-roll deterministically
   const groups = Object.keys(GROUPS);
   // `slots` total (time-budget driven): groups fill round-robin in a
-  // date-shuffled order; a focus day gives that group half the slots
+  // date-shuffled order; a focus day gives that group `focusPct`% of the slots
   const order = groups.slice();
   for (let i = order.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
@@ -107,7 +107,7 @@ function buildWorkout(date, allEx, emphasis, ratings = {}, nonce = 0, slots = 8)
   const counts = Object.fromEntries(groups.map((g) => [g, 0]));
   let rem = Math.max(1, slots);
   if (emphasis && GROUPS[emphasis]) {
-    counts[emphasis] = Math.max(1, Math.round(slots / 2));
+    counts[emphasis] = Math.max(1, Math.min(slots, Math.round(slots * focusPct / 100)));
     rem -= counts[emphasis];
     const others = order.filter((g) => g !== emphasis);
     for (let i = 0; rem > 0; i++, rem--) counts[others[i % others.length]]++;
@@ -310,7 +310,7 @@ function Stepper({ label, value, unit, min, max, step, onChange }) {
   );
 }
 
-function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, readySecs, setReadySecs, owned, onToggleOwned, focusEquip, isAdmin, extEquip, onAddCatalog, onRemoveCatalog, onClearHistory, onBack, userEmail, onSignOut, nav }) {
+function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, focusPct, setFocusPct, readySecs, setReadySecs, owned, onToggleOwned, focusEquip, isAdmin, extEquip, onAddCatalog, onRemoveCatalog, onClearHistory, onBack, userEmail, onSignOut, nav }) {
   const S = styles;
   const [armClear, setArmClear] = useState(false); // two-tap confirm for the destructive bit
   const [catLabel, setCatLabel] = useState("");
@@ -328,6 +328,11 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
         <div style={{ fontFamily: DISPLAY, fontSize: 26, fontWeight: 700, letterSpacing: 1 }}>SETTINGS</div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px" }}>
+        <div style={S.settingsLabel}>FOCUS</div>
+        <div style={{ fontSize: 12, color: "#6C7686", lineHeight: 1.5, marginTop: -2 }}>
+          When you pick a focus muscle group on the home screen, this is how much of the workout goes to it. <b>100% = only that group.</b>
+        </div>
+        <Stepper label="Focus group share" value={focusPct} unit="%" min={20} max={100} step={10} onChange={setFocusPct} />
         <div style={S.settingsLabel}>CIRCUIT MODE</div>
         <Stepper label="Rep cadence" value={tempo} unit="s" min={1} max={6} step={0.5} onChange={setTempo} />
         <Stepper label="Rest between exercises" value={restSecs} unit="s" min={5} max={60} step={5} onChange={setRestSecs} />
@@ -670,6 +675,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [tempo, setTempo] = useState(3);
   const [mode, setMode] = useState("circuit"); // circuit | hiit
   const [emphasis, setEmphasis] = useState("balanced"); // balanced | back | shoulders | arms | core
+  const [focusPct, setFocusPct] = useState(50); // % of the workout given to the focus group (100 = only that group)
   const [hiit, setHiit] = useState([40, 20]); // [work secs, rest secs]
   const [restSecs, setRestSecs] = useState(15);
   const [roundRest, setRoundRest] = useState(45);
@@ -818,9 +824,10 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       emphasis === "balanced" ? null : emphasis,
       ratings,
       shuffleN,
-      fullSlots
+      fullSlots,
+      focusPct
     ),
-    [today, levelPool, emphasis, ratings, shuffleN, excluded, fullSlots]
+    [today, levelPool, emphasis, ratings, shuffleN, excluded, fullSlots, focusPct]
   );
   /* burn-on-the-go: bodyweight-only, sized to fit the chosen time budget.
      Groups rotate for balance. */
@@ -948,6 +955,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         setRestSecs(s.restSecs ?? 15); setRoundRest(s.roundRest ?? 45);
         setVenue(s.venue ?? "home"); setGymRest(s.gymRest ?? 60);
         setEmphasis(s.emphasis ?? "balanced");
+        setFocusPct(s.focusPct ?? 50);
         setReadySecs(s.readySecs ?? 5);
         setGoMins(s.goMins ?? 10);
         setGoEffort(s.goEffort ?? "steady");
@@ -964,8 +972,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   }, []);
   useEffect(() => {
     if (!loaded) return;
-    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned, workoutLevel, venue, gymRest }, { debounce: 600 });
-  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned, workoutLevel, venue, gymRest]);
+    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned, workoutLevel, venue, gymRest, focusPct }, { debounce: 600 });
+  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned, workoutLevel, venue, gymRest, focusPct]);
 
   /* admin: count pending Validate items once after load, for the home badge */
   useEffect(() => {
@@ -1547,6 +1555,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     return <Settings tempo={tempo} setTempo={setTempo} restSecs={restSecs} setRestSecs={setRestSecs}
       roundRest={roundRest} setRoundRest={setRoundRest} hiit={hiit} setHiit={setHiit}
       voiceOn={voiceOn} setVoiceOn={setVoiceOn}
+      focusPct={focusPct} setFocusPct={setFocusPct}
       readySecs={readySecs} setReadySecs={setReadySecs}
       owned={owned} onToggleOwned={toggleOwned}
       focusEquip={settingsFocus === "equip"}
