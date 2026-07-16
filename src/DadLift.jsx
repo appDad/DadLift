@@ -960,9 +960,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         setFocusPct(s.focusPct ?? 50);
         setReadySecs(s.readySecs ?? 5);
         setGoMins(s.goMins ?? 10);
-        setGoEffort(s.goEffort ?? "steady");
         setFullMins(s.fullMins ?? 20);
-        setFullEffort(s.fullEffort ?? "steady");
+        // effort option removed — everything runs at "steady" (×1, no rep scaling)
         setWorkoutLevel((s.workoutLevel ?? "adv") === "all" ? "adv" : (s.workoutLevel ?? "adv"));
         setEquip(s.equip ?? {});
         // normalize any legacy free-text equipment into catalog keys
@@ -974,8 +973,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   }, []);
   useEffect(() => {
     if (!loaded) return;
-    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned, workoutLevel, venue, gymRest, focusPct }, { debounce: 600 });
-  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, goEffort, fullMins, fullEffort, equip, owned, workoutLevel, venue, gymRest, focusPct]);
+    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, fullMins, equip, owned, workoutLevel, venue, gymRest, focusPct }, { debounce: 600 });
+  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, fullMins, equip, owned, workoutLevel, venue, gymRest, focusPct]);
 
   /* admin: count pending Validate items once after load, for the home badge */
   useEffect(() => {
@@ -2036,12 +2035,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         {homeTab === "go" ? (
         <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "4px 16px" }}>
-            <SetupRow label="TIME">
+            <SetupRow label="TIME" last>
               <MiniStep value={goMins} unit="m" min={5} max={30} step={5} onChange={setGoMins} />
-            </SetupRow>
-            <SetupRow label="EFFORT" last>
-              <Seg options={[["easy", "😌 easy"], ["steady", "💪 steady"], ["hard", "🔥 hard"]]} value={goEffort} onChange={setGoEffort}
-                colors={{ easy: "#2FA671", steady: "#4F7DF0", hard: "#E8433F" }} />
             </SetupRow>
           </div>
           <button onClick={startAnywhere}
@@ -2069,15 +2064,17 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               <Seg options={[["circuit", "CIRCUIT"], ["hiit", "HIIT"]]} value={mode} onChange={setMode}
                 colors={{ circuit: "#1B2430", hiit: "#E8590C" }} />
             </SetupRow>
-            <SetupRow label="ROUNDS">
-              <MiniStep value={rounds} min={1} max={3} step={1} onChange={setRounds} />
+            <SetupRow label={
+              <div>ROUNDS
+                <div style={{ fontSize: 9, fontWeight: 400, letterSpacing: 0.3, color: "#9AA3B0", marginTop: 2, textTransform: "none" }}>
+                  times through the whole circuit
+                </div>
+              </div>
+            }>
+              <MiniStep value={rounds} unit="×" min={1} max={3} step={1} onChange={setRounds} />
             </SetupRow>
-            <SetupRow label="TIME">
+            <SetupRow label="TIME" last>
               <MiniStep value={fullMins} unit="m" min={10} max={60} step={5} onChange={setFullMins} />
-            </SetupRow>
-            <SetupRow label="EFFORT" last>
-              <Seg options={[["easy", "😌 easy"], ["steady", "💪 steady"], ["hard", "🔥 hard"]]} value={fullEffort} onChange={setFullEffort}
-                colors={{ easy: "#2FA671", steady: "#4F7DF0", hard: "#E8433F" }} />
             </SetupRow>
           </div>
           <button onClick={start} style={S.startBtn}>
