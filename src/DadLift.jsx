@@ -1063,11 +1063,13 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   };
   /* merge a patch into the admin global exercise-override doc */
   const setAdminOverride = (id, patch) => {
-    const cur = exOverrides[id] || {};
-    const merged = { ...cur, ...patch };
-    const next = { ...exOverrides, [id]: merged };
-    setExOverrides(next);
-    saveExOverrides(next);
+    // functional update so rapid successive edits (e.g. clearing the Validate
+    // queue) each build on the latest state instead of a stale closure
+    setExOverrides((prev) => {
+      const next = { ...prev, [id]: { ...(prev[id] || {}), ...patch } };
+      saveExOverrides(next);
+      return next;
+    });
     if (uniOverride[id] != null && "uni" in patch) { // global wins — drop my personal one
       const o = { ...uniOverride }; delete o[id]; setUniOverride(o); saveJSON("unilateral", o);
     }

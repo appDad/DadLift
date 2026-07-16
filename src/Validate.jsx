@@ -69,7 +69,11 @@ export default function Validate({ allEx, exOverrides, onMakeGlobal, onCount, na
   // differs from the new default, so it's a real "someone disagrees" item.
   const makeGlobal = (s) => {
     onMakeGlobal(s.exId, s.patch);
-    setRows((rs) => rs.filter((r) => keyOf(r) !== keyOf(s)));
+    const key = keyOf(s);
+    const next = [...dismissedRef.current, key]; // also record it so it never re-nags
+    dismissedRef.current = next;
+    saveJSON("validatedismiss", next);
+    setRows((rs) => rs.filter((r) => keyOf(r) !== key));
   };
   // reject a suggestion — persist it so it stays gone; leftover rows = unreviewed
   const discard = (s) => {
