@@ -310,7 +310,7 @@ function Stepper({ label, value, unit, min, max, step, onChange }) {
   );
 }
 
-function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, focusPct, setFocusPct, readySecs, setReadySecs, owned, onToggleOwned, focusEquip, isAdmin, extEquip, onAddCatalog, onRemoveCatalog, onClearHistory, onBack, userEmail, onSignOut, nav }) {
+function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, focusPct, setFocusPct, readySecs, setReadySecs, owned, onToggleOwned, focusEquip, isAdmin, extEquip, onAddCatalog, onRemoveCatalog, onClearHistory, onBack, userEmail, onSignOut, nav, exerciseControls }) {
   const S = styles;
   const [armClear, setArmClear] = useState(false); // two-tap confirm for the destructive bit
   const [catLabel, setCatLabel] = useState("");
@@ -328,6 +328,7 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
         <div style={{ fontFamily: DISPLAY, fontSize: 26, fontWeight: 700, letterSpacing: 1 }}>SETTINGS</div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px" }}>
+        {exerciseControls}
         <div style={S.settingsLabel}>FOCUS</div>
         <div style={{ fontSize: 12, color: "#6C7686", lineHeight: 1.5, marginTop: -2 }}>
           When you pick a focus muscle group on the home screen, this is how much of the workout goes to it. <b>100% = only that group.</b>
@@ -2164,16 +2165,62 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       ? readySecs
       : (mode === "hiit" ? hiit[0] : ex.type === "time" ? secsOf(ex) : 0);
 
+  // the current exercise's tweaks — now lives inside the pause-and-adjust popup
+  const exerciseAdjustCard = mode !== "hiit" ? (
+    <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px rgba(27,36,48,0.06)", display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ fontSize: 9, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>
+        THIS EXERCISE — <span style={{ color: g.color }}>{ex.name.toUpperCase()}</span>
+      </div>
+      {ex.type === "reps" && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button onClick={() => setCad(ex.id, cadenceOf(ex) + 0.5)}
+            style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: "#EFF1F5", color: "#6C7686" }}>🐢 SLOWER</button>
+          <div style={{ fontFamily: DISPLAY, fontSize: 15, fontWeight: 700, color: "#6C7686", minWidth: 58, textAlign: "center" }}>{cadenceOf(ex)}s/rep</div>
+          <button onClick={() => setCad(ex.id, cadenceOf(ex) - 0.5)}
+            style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: "#EFF1F5", color: "#6C7686" }}>🐇 FASTER</button>
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={togglePlayerUni}
+          style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: effUni(ex) ? "#DCE7FB" : "#EFF1F5", color: effUni(ex) ? "#2456B3" : "#6C7686" }}>
+          {effUni(ex) ? "R/L SIDES" : "NO SIDES"}
+        </button>
+        <button onClick={togglePlayerType}
+          style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: "#EFF1F5", color: "#6C7686" }}>
+          {ex.type === "time" ? `⏱ TIMED ${secsOf(ex)}s` : "# COUNTED"}
+        </button>
+      </div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#9AA3B0", letterSpacing: 1, width: 42, flexShrink: 0 }}>LEVEL</span>
+        {[["beg", "BEG", "#2FA671"], ["int", "INT", "#4F7DF0"], ["adv", "ADV", "#E8433F"]].map(([lv, label, col]) => {
+          const on = levelOf(ex) === lv;
+          return (
+            <button key={lv} onClick={() => setLevelOv(ex.id, lv)}
+              style={{ ...S.startBtn, flex: 1, fontSize: 14, padding: "12px 0", background: on ? col : "#EFF1F5", color: on ? "#FFFFFF" : "#6C7686" }}>
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div style={{ ...S.app, display: "flex", flexDirection: "column" }}>
       <style>{FONT_CSS}</style>
-      <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ padding: "16px 20px 8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button onClick={quitWorkout} style={S.ghostBtn}>✕ end</button>
         <div style={{ fontSize: 13, color: paused ? "#B47E10" : "#6C7686", letterSpacing: 1, fontWeight: paused ? 700 : 400 }}>
           {paused ? "PAUSED" : <>{quickEx ? "DO-ANYWHERE · " : ""}ROUND {round}/{sessionRounds} · {idx + 1}/{exList.length}</>}
         </div>
         <button onClick={() => (isRest ? startNext() : advance(true))} style={S.ghostBtn}>skip ›</button>
       </div>
+      <button onClick={() => { setPaused(true); setSettingsModal(true); }}
+        style={{ margin: "0 16px 6px", padding: "11px 14px", border: "none", borderRadius: 10, cursor: "pointer",
+          background: "linear-gradient(135deg, #4F7DF0, #7B5BE6)", color: "#FFFFFF", fontWeight: 700, fontSize: 13, letterSpacing: 0.5,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: "0 3px 8px rgba(91,141,239,0.3)" }}>
+        ⏸ PAUSE &amp; ADJUST — CADENCE, SIDES, SETTINGS
+      </button>
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "0 20px", textAlign: "center" }}>
         <div style={{ fontSize: 12, letterSpacing: 2, fontWeight: 700, color: shownG.color, textTransform: "uppercase" }}>
@@ -2250,59 +2297,6 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           style={{ ...S.startBtn, background: paused ? "#2FA671" : "#E4E7EC", color: paused ? "#FFFFFF" : "#1B2430" }}>
           {paused ? "▶ RESUME" : "❚❚ PAUSE"}
         </button>
-        {!isRest && mode !== "hiit" && (
-          <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "10px 12px 12px", boxShadow: "0 1px 3px rgba(27,36,48,0.06)", display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ fontSize: 9, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>ADJUST THIS EXERCISE</div>
-            {!isReady && ex.type === "reps" && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <button onClick={() => setCad(ex.id, cadenceOf(ex) + 0.5)}
-                  title="Slow the count down for this exercise"
-                  style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: "#EFF1F5", color: "#6C7686" }}>
-                  🐢 SLOWER
-                </button>
-                <div style={{ fontFamily: DISPLAY, fontSize: 15, fontWeight: 700, color: "#6C7686", minWidth: 58, textAlign: "center" }}>
-                  {cadenceOf(ex)}s/rep
-                </div>
-                <button onClick={() => setCad(ex.id, cadenceOf(ex) - 0.5)}
-                  title="Speed the count up for this exercise"
-                  style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: "#EFF1F5", color: "#6C7686" }}>
-                  🐇 FASTER
-                </button>
-              </div>
-            )}
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={togglePlayerUni}
-                style={{
-                  ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0",
-                  background: effUni(ex) ? "#DCE7FB" : "#EFF1F5",
-                  color: effUni(ex) ? "#2456B3" : "#6C7686",
-                }}>
-                {effUni(ex) ? "R/L SIDES" : "NO SIDES"}
-              </button>
-              <button onClick={togglePlayerType}
-                title="Tap to switch this exercise between timed and counted"
-                style={{ ...S.startBtn, flex: 1, fontSize: 15, padding: "12px 0", background: "#EFF1F5", color: "#6C7686" }}>
-                {ex.type === "time" ? `⏱ TIMED ${secsOf(ex)}s` : "# COUNTED"}
-              </button>
-            </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#9AA3B0", letterSpacing: 1, width: 42, flexShrink: 0 }}>LEVEL</span>
-              {[["beg", "BEG", "#2FA671"], ["int", "INT", "#4F7DF0"], ["adv", "ADV", "#E8433F"]].map(([lv, label, col]) => {
-                const on = levelOf(ex) === lv;
-                return (
-                  <button key={lv} onClick={() => setLevelOv(ex.id, lv)}
-                    style={{ ...S.startBtn, flex: 1, fontSize: 14, padding: "12px 0", background: on ? col : "#EFF1F5", color: on ? "#FFFFFF" : "#6C7686" }}>
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-            <button onClick={() => { setPaused(true); setSettingsModal(true); }}
-              style={{ border: "none", background: "none", color: "#4F7DF0", fontSize: 12, fontWeight: 600, cursor: "pointer", textDecoration: "underline", alignSelf: "center", marginTop: 2 }}>
-              Cadence or timing not right? Change all settings →
-            </button>
-          </div>
-        )}
         {!isRest && !isReady && mode !== "hiit" && ex.type === "reps" && (
           <button onClick={() => (side === "L" ? switchToRight() : advance())} style={S.startBtn}>
             {side === "L" ? "LEFT DONE — SWITCH SIDES" : "DONE — NEXT"}
@@ -2323,6 +2317,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       {settingsModal && (
         <div style={{ position: "fixed", inset: 0, zIndex: 200, overflowY: "auto", background: "rgba(15,20,30,0.5)" }}>
           <Settings {...settingsProps}
+            exerciseControls={exerciseAdjustCard}
             onBack={() => { setSettingsModal(false); setPaused(false); }}
             nav={
               <div style={{ position: "sticky", top: 0, zIndex: 20, background: "#1B2430", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px" }}>
