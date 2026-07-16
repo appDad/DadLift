@@ -310,7 +310,7 @@ function Stepper({ label, value, unit, min, max, step, onChange }) {
   );
 }
 
-function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit, voiceOn, setVoiceOn, focusPct, setFocusPct, readySecs, setReadySecs, owned, onToggleOwned, focusEquip, isAdmin, extEquip, onAddCatalog, onRemoveCatalog, onClearHistory, onBack, userEmail, onSignOut, nav, exerciseControls }) {
+function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, gymRest, setGymRest, hiit, setHiit, voiceOn, setVoiceOn, focusPct, setFocusPct, readySecs, setReadySecs, owned, onToggleOwned, focusEquip, isAdmin, extEquip, onAddCatalog, onRemoveCatalog, onClearHistory, onBack, userEmail, onSignOut, nav, exerciseControls, inWorkout }) {
   const S = styles;
   const [armClear, setArmClear] = useState(false); // two-tap confirm for the destructive bit
   const [catLabel, setCatLabel] = useState("");
@@ -334,15 +334,20 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
           When you pick a focus muscle group on the home screen, this is how much of the workout goes to it. <b>100% = only that group.</b>
         </div>
         <Stepper label="Focus group share" value={focusPct} unit="%" min={20} max={100} step={10} onChange={setFocusPct} />
-        <div style={S.settingsLabel}>CIRCUIT MODE</div>
+        <div style={S.settingsLabel}>PACING</div>
         <Stepper label="Rep cadence" value={tempo} unit="s" min={1} max={6} step={0.5} onChange={setTempo} />
-        <Stepper label="Rest between exercises" value={restSecs} unit="s" min={5} max={60} step={5} onChange={setRestSecs} />
         <Stepper label="Get-set countdown before each set" value={readySecs} unit="s" min={0} max={20} step={5} onChange={setReadySecs} />
+        <div style={S.settingsLabel}>🏠 HOME — BREAKS</div>
+        <Stepper label="Rest between exercises" value={restSecs} unit="s" min={5} max={60} step={5} onChange={setRestSecs} />
+        <Stepper label="Rest between rounds" value={roundRest} unit="s" min={15} max={180} step={15} onChange={setRoundRest} />
+        <div style={S.settingsLabel}>🏋 GYM — BREAKS</div>
+        <div style={{ fontSize: 12, color: "#6C7686", lineHeight: 1.5, marginTop: -2 }}>
+          Gym breaks are self-paced — this is just the suggested countdown; the workout waits until you tap "ready" at the next station.
+        </div>
+        <Stepper label="Transition between stations" value={gymRest} unit="s" min={30} max={180} step={15} onChange={setGymRest} />
         <div style={S.settingsLabel}>HIIT MODE</div>
         <Stepper label="Work interval" value={hiit[0]} unit="s" min={10} max={90} step={5} onChange={(v) => setHiit([v, hiit[1]])} />
         <Stepper label="Rest interval" value={hiit[1]} unit="s" min={5} max={60} step={5} onChange={(v) => setHiit([hiit[0], v])} />
-        <div style={S.settingsLabel}>BOTH MODES</div>
-        <Stepper label="Rest between rounds" value={roundRest} unit="s" min={15} max={180} step={15} onChange={setRoundRest} />
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", borderRadius: 12, padding: "12px 14px" }}>
           <div style={{ fontSize: 14, color: "#3D4756" }}>Voice (rep counting + announcements)</div>
           <button onClick={() => setVoiceOn(!voiceOn)}
@@ -350,6 +355,7 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
             {voiceOn ? "ON" : "OFF"}
           </button>
         </div>
+        {!inWorkout && (<>
         <div style={S.settingsLabel} ref={equipRef}>WHAT EQUIPMENT DO YOU OWN?</div>
         <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ fontSize: 13, color: "#6C7686", lineHeight: 1.4 }}>
@@ -444,6 +450,7 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
           <div style={{ fontSize: 13, color: "#6C7686", overflow: "hidden", textOverflow: "ellipsis" }}>{userEmail}</div>
           <button onClick={onSignOut} style={{ ...S.pill, background: "#E4E7EC", color: "#E85D5D" }}>sign out</button>
         </div>
+        </>)}
       </div>
     </div>
   );
@@ -680,7 +687,6 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [hiit, setHiit] = useState([40, 20]); // [work secs, rest secs]
   const [restSecs, setRestSecs] = useState(15);
   const [roundRest, setRoundRest] = useState(45);
-  const [venue, setVenue] = useState("home"); // home | gym — gym gives longer, self-paced transitions
   const [gymRest, setGymRest] = useState(60); // suggested transition seconds between gym stations
   const [voiceOn, setVoiceOn] = useState(true);
   const [round, setRound] = useState(1);
@@ -715,7 +721,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [share, setShare] = useState({ id: null, on: false }); // public progress page
   const [shareCopied, setShareCopied] = useState(false);
   const [settingsFocus, setSettingsFocus] = useState(null); // "equip" scrolls settings to that section
-  const [homeTab, setHomeTab] = useState("full"); // full workout | burn on the go
+  const [homeTab, setHomeTab] = useState("home"); // home | gym (both full workouts) | go (burn on the go)
+  const venue = homeTab === "gym" ? "gym" : "home"; // gym gives longer, self-paced transitions
   const [focusArrows, setFocusArrows] = useState({ l: false, r: true }); // focus-row scroll affordance
   const focusRowRef = useRef(null);
   const scrollFocus = (dir) => {
@@ -724,7 +731,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   };
   // poll the row's scroll position (native scroll events proved flaky in this WebView)
   useEffect(() => {
-    if (screen !== "home" || homeTab !== "full") return;
+    if (screen !== "home" || homeTab === "go") return;
     const tick = () => {
       const el = focusRowRef.current;
       if (!el) return;
@@ -955,7 +962,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         setRounds(s.rounds ?? 2); setTempo(s.tempo ?? 3); setVoiceOn(s.voiceOn ?? true);
         setMode(s.mode ?? "circuit"); setHiit(s.hiit ?? [40, 20]);
         setRestSecs(s.restSecs ?? 15); setRoundRest(s.roundRest ?? 45);
-        setVenue(s.venue ?? "home"); setGymRest(s.gymRest ?? 60);
+        setGymRest(s.gymRest ?? 60);
         setEmphasis(s.emphasis ?? "balanced");
         setFocusPct(s.focusPct ?? 50);
         setReadySecs(s.readySecs ?? 5);
@@ -973,8 +980,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   }, []);
   useEffect(() => {
     if (!loaded) return;
-    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, fullMins, equip, owned, workoutLevel, venue, gymRest, focusPct }, { debounce: 600 });
-  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, fullMins, equip, owned, workoutLevel, venue, gymRest, focusPct]);
+    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, fullMins, equip, owned, workoutLevel, gymRest, focusPct }, { debounce: 600 });
+  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, fullMins, equip, owned, workoutLevel, gymRest, focusPct]);
 
   /* admin: count pending Validate items once after load, for the home badge */
   useEffect(() => {
@@ -1544,7 +1551,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
   // shared so Settings can render both as its own screen AND as the in-workout popup
   const settingsProps = {
-    tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, hiit, setHiit,
+    tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundRest, gymRest, setGymRest, hiit, setHiit,
     voiceOn, setVoiceOn, focusPct, setFocusPct, readySecs, setReadySecs,
     owned, onToggleOwned: toggleOwned, focusEquip: settingsFocus === "equip",
     isAdmin, extEquip, onAddCatalog: addCatalogEquip, onRemoveCatalog: removeCatalogEquip,
@@ -1794,12 +1801,16 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           </div>
         )}
 
-        <div style={{ display: "flex", gap: 8, padding: "0 16px 14px" }}>
-          {[["full", "FULL WORKOUT", "linear-gradient(135deg, #4F7DF0 0%, #7B5BE6 100%)"], ["go", "🔥 BURN ON THE GO", "linear-gradient(135deg, #F1762A 0%, #E8433F 100%)"]].map(([k, label, grad]) => (
+        <div style={{ display: "flex", gap: 6, padding: "0 16px 14px" }}>
+          {[
+            ["home", "🏠 HOME", "linear-gradient(135deg, #4F7DF0 0%, #7B5BE6 100%)"],
+            ["gym", "🏋 GYM", "linear-gradient(135deg, #0FA3A3 0%, #17B8A6 100%)"],
+            ["go", "🔥 ON THE GO", "linear-gradient(135deg, #F1762A 0%, #E8433F 100%)"],
+          ].map(([k, label, grad]) => (
             <button key={k} onClick={() => setHomeTab(k)}
               style={{
-                ...S.pill, flex: 1, padding: "11px 0", borderRadius: 12,
-                fontFamily: DISPLAY, fontSize: 17, fontWeight: 700, letterSpacing: 1,
+                ...S.pill, flex: 1, padding: "11px 4px", borderRadius: 12,
+                fontFamily: DISPLAY, fontSize: 14.5, fontWeight: 700, letterSpacing: 0.3, whiteSpace: "nowrap",
                 background: homeTab === k ? grad : "#FFFFFF",
                 color: homeTab === k ? "#FFFFFF" : "#3D4756",
                 boxShadow: homeTab === k ? "0 4px 12px rgba(27,36,48,0.18)" : "0 1px 3px rgba(27,36,48,0.06)",
@@ -1809,7 +1820,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           ))}
         </div>
 
-        {homeTab === "full" && (
+        {homeTab !== "go" && (
         <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "10px 14px", margin: "0 16px 14px" }}>
           <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, marginBottom: 8 }}>
             TODAY'S EQUIPMENT — TAP WHAT YOU HAVE
@@ -1847,7 +1858,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         </div>
         )}
 
-        {homeTab === "full" && (
+        {homeTab !== "go" && (
           <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, padding: "0 16px 8px" }}>
             TODAY'S FOCUS — TAP A MUSCLE GROUP
@@ -2051,15 +2062,6 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         ) : (
         <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "4px 16px" }}>
-            <SetupRow label="WHERE">
-              <Seg options={[["home", "🏠 HOME"], ["gym", "🏋 GYM"]]} value={venue} onChange={setVenue}
-                colors={{ home: "#2FA671", gym: "#4F7DF0" }} />
-            </SetupRow>
-            {venue === "gym" && (
-              <SetupRow label="TRANSITION">
-                <MiniStep value={gymRest} unit="s" min={30} max={180} step={15} onChange={setGymRest} />
-              </SetupRow>
-            )}
             <SetupRow label="MODE">
               <Seg options={[["circuit", "CIRCUIT"], ["hiit", "HIIT"]]} value={mode} onChange={setMode}
                 colors={{ circuit: "#1B2430", hiit: "#E8590C" }} />
@@ -2314,7 +2316,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       {settingsModal && (
         <div style={{ position: "fixed", inset: 0, zIndex: 200, overflowY: "auto", background: "rgba(15,20,30,0.5)" }}>
           <Settings {...settingsProps}
-            exerciseControls={exerciseAdjustCard}
+            exerciseControls={exerciseAdjustCard} inWorkout
             onBack={() => { setSettingsModal(false); setPaused(false); }}
             nav={
               <div style={{ position: "sticky", top: 0, zIndex: 20, background: "#1B2430", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px" }}>
