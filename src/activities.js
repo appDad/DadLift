@@ -57,8 +57,9 @@ export const ACTIVITIES = [
     circles: [[13.5, 4.8, 2]],
     paths: ["M13 7 L11 12.5", "M11 12.5 L13 16.8", "M13 8 L16 10", "M16 10 L17 16.5", "M6 18.5 L20.5 16.5", "M6.5 20.5 L21 18.5"],
   },
-  {
-    id: "other", name: "Other", grp: null,
-    paths: ["M7 8 V16", "M17 8 V16", "M7 12 H17", "M4 9.5 V14.5", "M20 9.5 V14.5"],
-  },
 ];
+
+/* icon for user-created custom activities (a little dumbbell) */
+export const CUSTOM_ACT_ICON = {
+  paths: ["M7 8 V16", "M17 8 V16", "M7 12 H17", "M4 9.5 V14.5", "M20 9.5 V14.5"],
+};

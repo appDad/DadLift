@@ -3,7 +3,7 @@ import { loadJSON, saveJSON } from "./storage";
 import { coachModel } from "./firebase";
 import { POSES, GROUPS, BUILTIN, EQUIPMENT, DEFAULT_EQUIP, normalizeEquip, inferEquip, famOf, levelOf, LEVEL_LABEL, extendEquipment, equipSlug, buildAddPrompt, validateExercise, resolveFrames } from "./exercises";
 import { loadExOverrides, saveExOverrides } from "./exoverrides";
-import { ACTIVITIES } from "./activities";
+import { ACTIVITIES, CUSTOM_ACT_ICON } from "./activities";
 import { loadEquipExtensions, saveEquipExtensions } from "./catalog";
 import { loadCommunity, publishExercise, unpublishExercise } from "./community";
 import { ymd, calcStreak, thisWeekCount } from "./summary";
@@ -721,7 +721,9 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [actSel, setActSel] = useState(null); // activity being logged on the log-activity screen
   const [actMins, setActMins] = useState(45); // sticky between logs — most people repeat durations
   const [actDate, setActDate] = useState(""); // ymd; can be a PAST date to backfill missed days
-  const [actNote, setActNote] = useState(""); // "Other" only — what the activity actually was
+  const [actNote, setActNote] = useState(""); // name input while creating a custom activity
+  const [actAdding, setActAdding] = useState(false); // "+" tile tapped — naming a new custom activity
+  const [myActs, setMyActs] = useState([]); // personal custom activities [{id, name}] — persist on the grid
   const [phase, setPhase] = useState("work"); // work | rest | ready (get-set countdown, circuit only)
   const [timeLeft, setTimeLeft] = useState(0);
   const [rep, setRep] = useState(0);
@@ -927,6 +929,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       setRatings(await loadJSON("ratings", {}));
       setUniOverride(await loadJSON("unilateral", {}));
       setCadence(await loadJSON("cadence", {}));
+      setMyActs(await loadJSON("myacts", []));
       const wt = await loadJSON("weights", { list: [], share: false });
       setWeights(wt.list || []);
       setShareWeight(!!wt.share);
@@ -1163,16 +1166,14 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
      toward streak/weekly/totals exactly like an app workout. The date can be a
      PAST day to backfill something you did but never logged. */
   const logActivity = () => {
-    const a = ACTIVITIES.find((x) => x.id === actSel);
+    const a = [...ACTIVITIES, ...myActs].find((x) => x.id === actSel);
     const d = actDate || ymd(today);
     if (!a || d > ymd(today)) return;
-    // "Other" carries the user's own description ("Kayaking") as the shown name
-    const label = (a.id === "other" && actNote.trim()) ? actNote.trim().slice(0, 30) : a.name;
     const entry = {
       d, ts: Date.now(), mode: "activity", act: a.id, mins: actMins,
       n: 1, rounds: 1, exDone: 1, totalReps: 0, totalSecs: actMins * 60,
       groups: a.grp ? { [a.grp]: 1 } : {},
-      exercises: [label],
+      exercises: [a.name],
     };
     const newHist = [...history, entry]; // appends — never clobbers the day's app workout
     setHistory(newHist);
@@ -1182,6 +1183,24 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     setActSel(null);
     setActNote("");
     setScreen("home");
+  };
+  /* custom activities: created once via the "+" tile, then live on the grid */
+  const addMyActivity = () => {
+    const name = actNote.trim().slice(0, 24);
+    if (!name) return;
+    const a = { id: "c_" + Date.now().toString(36), name };
+    const next = [...myActs, a];
+    setMyActs(next);
+    saveJSON("myacts", next);
+    setActSel(a.id); // freshly added — almost certainly what they're logging
+    setActAdding(false);
+    setActNote("");
+  };
+  const removeMyActivity = (id) => {
+    const next = myActs.filter((a) => a.id !== id);
+    setMyActs(next);
+    saveJSON("myacts", next);
+    if (actSel === id) setActSel(null);
   };
 
   /* ----- today's-workout tweaks: reshuffle + thumb-out ----- */
@@ -1646,7 +1665,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
   /* ---------- LOG A NON-APP ACTIVITY ---------- */
   if (screen === "logact") {
-    const sel = ACTIVITIES.find((x) => x.id === actSel);
+    const sel = [...ACTIVITIES, ...myActs].find((x) => x.id === actSel);
     const dateOk = (actDate || ymd(today)) <= ymd(today);
     return (
       <div style={S.app}>
@@ -1660,32 +1679,55 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "10px 16px 24px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-            {ACTIVITIES.map((a) => {
+            {[...ACTIVITIES, ...myActs].map((a) => {
               const on = actSel === a.id;
+              const custom = a.id.startsWith("c_");
               return (
                 <button key={a.id} onClick={() => setActSel(on ? null : a.id)}
                   style={{
-                    border: "none", borderRadius: 12, cursor: "pointer", padding: "12px 4px 10px",
+                    position: "relative", border: "none", borderRadius: 12, cursor: "pointer", padding: "12px 4px 10px",
                     background: on ? "#1B2430" : "#FFFFFF", color: on ? "#F5F6F8" : "#3D4756",
                     boxShadow: on ? "0 4px 12px rgba(27,36,48,0.25)" : "0 1px 3px rgba(27,36,48,0.06)",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
                   }}>
-                  <ActIcon a={a} />
-                  <span style={{ fontSize: 12, fontWeight: 700 }}>{a.name}</span>
+                  {custom && (
+                    <span onClick={(ev) => { ev.stopPropagation(); removeMyActivity(a.id); }}
+                      style={{ position: "absolute", top: 4, right: 7, fontSize: 12, color: on ? "#9AA3B0" : "#CBD2DC", lineHeight: 1 }}>
+                      ✕
+                    </span>
+                  )}
+                  <ActIcon a={custom ? CUSTOM_ACT_ICON : a} />
+                  <span style={{ fontSize: 12, fontWeight: 700, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
                 </button>
               );
             })}
+            <button onClick={() => { setActAdding(!actAdding); setActNote(""); }}
+              style={{
+                border: "1.5px dashed #C4CBD6", borderRadius: 12, cursor: "pointer", padding: "12px 4px 10px",
+                background: actAdding ? "#EFF1F5" : "transparent", color: "#6C7686",
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+              }}>
+              <span style={{ fontSize: 24, lineHeight: 1 }}>＋</span>
+              <span style={{ fontSize: 12, fontWeight: 700 }}>ADD MY OWN</span>
+            </button>
           </div>
 
-          {actSel === "other" && (
-            <input
-              value={actNote} onChange={(e) => setActNote(e.target.value)} maxLength={30}
-              placeholder="what was it? — e.g. kayaking, pickup soccer"
-              style={{
-                boxSizing: "border-box", width: "100%", background: "#FFFFFF", color: "#1B2430",
-                border: "1px solid #DDE2E9", borderRadius: 12, padding: "13px 14px", fontSize: 14,
-                boxShadow: "0 1px 3px rgba(27,36,48,0.06)",
-              }} />
+          {actAdding && (
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                value={actNote} onChange={(e) => setActNote(e.target.value)} maxLength={24} autoFocus
+                onKeyDown={(e) => e.key === "Enter" && addMyActivity()}
+                placeholder="name it — e.g. kayaking, pickup soccer"
+                style={{
+                  flex: 1, boxSizing: "border-box", background: "#FFFFFF", color: "#1B2430",
+                  border: "1px solid #DDE2E9", borderRadius: 12, padding: "13px 14px", fontSize: 14,
+                  boxShadow: "0 1px 3px rgba(27,36,48,0.06)",
+                }} />
+              <button onClick={addMyActivity} disabled={!actNote.trim()}
+                style={{ ...S.pill, flexShrink: 0, padding: "0 18px", background: "#1B2430", color: "#F5F6F8", opacity: actNote.trim() ? 1 : 0.4 }}>
+                ADD
+              </button>
+            </div>
           )}
 
           <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "4px 16px", boxShadow: "0 1px 3px rgba(27,36,48,0.06)" }}>
@@ -1710,7 +1752,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
           <button onClick={logActivity} disabled={!sel || !dateOk}
             style={{ ...S.startBtn, opacity: sel && dateOk ? 1 : 0.4 }}>
-            {sel ? `SAVE — ${(sel.id === "other" && actNote.trim() ? actNote.trim() : sel.name).toUpperCase()} · ${actMins} MIN` : "PICK AN ACTIVITY"}
+            {sel ? `SAVE — ${sel.name.toUpperCase()} · ${actMins} MIN` : "PICK AN ACTIVITY"}
           </button>
         </div>
       </div>
@@ -1899,7 +1941,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               {allEx.length} in library · {mode === "hiit" ? `HIIT ${hiit[0]}s on / ${hiit[1]}s off` : `reps today: ${workout.reps} · ${tempo}s/rep`}
             </div>
           </div>
-          <button onClick={() => { setActSel(null); setActNote(""); setActDate(ymd(today)); setScreen("logact"); }}
+          <button onClick={() => { setActSel(null); setActNote(""); setActAdding(false); setActDate(ymd(today)); setScreen("logact"); }}
             style={{
               marginLeft: "auto", alignSelf: "flex-start", flexShrink: 0, border: "none", borderRadius: 10, cursor: "pointer",
               background: "linear-gradient(135deg, #2FA671, #37B98A)", color: "#FFFFFF",
