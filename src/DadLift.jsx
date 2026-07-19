@@ -223,6 +223,13 @@ function ActIcon({ a, size = 26 }) {
   );
 }
 
+/* small monotone glyphs for the Home / Gym / On-the-go tabs (ActIcon data) */
+const TAB_ICONS = {
+  home: { paths: ["M3 10.5 L12 3 L21 10.5", "M5 9.5 V20 a1 1 0 0 0 1 1 h12 a1 1 0 0 0 1 -1 V9.5", "M9.5 21 v-6 h5 v6"] },
+  gym: { paths: ["M7 8 V16", "M17 8 V16", "M7 12 H17", "M4 9.5 V14.5", "M20 9.5 V14.5"] },
+  go: { paths: ["M12 3 C15 7 18.8 9.2 18.4 14 C18 18.5 15 20.5 12 20.5 C9 20.5 6 18.5 5.6 14 C5.2 9.2 9 7 12 3 Z", "M12 12.5 Q13.8 14.5 12 17 Q10.2 14.5 12 12.5"] },
+};
+
 export function Figure({ frames, color, size = 160 }) {
   const [f, setF] = useState(0);
   useEffect(() => {
@@ -355,12 +362,12 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
         <Stepper label="Rep cadence" value={tempo} unit="s" min={1} max={6} step={0.5} onChange={setTempo} />
         <Stepper label="Get-set countdown before each set" value={readySecs} unit="s" min={0} max={20} step={5} onChange={setReadySecs} />
         {(!inWorkout || venue === "home") && (<>
-          <div style={S.settingsLabel}>🏠 HOME — BREAKS</div>
+          <div style={S.settingsLabel}>HOME — BREAKS</div>
           <Stepper label="Rest between exercises" value={restSecs} unit="s" min={5} max={60} step={5} onChange={setRestSecs} />
           <Stepper label="Rest between rounds" value={roundRest} unit="s" min={15} max={180} step={15} onChange={setRoundRest} />
         </>)}
         {(!inWorkout || venue === "gym") && (<>
-          <div style={S.settingsLabel}>🏋 GYM — BREAKS</div>
+          <div style={S.settingsLabel}>GYM — BREAKS</div>
           <div style={{ fontSize: 12, color: "#6C7686", lineHeight: 1.5, marginTop: -2 }}>
             Gym breaks are self-paced — this is just the suggested countdown; the workout waits until you tap "ready" at the next station.
           </div>
@@ -831,7 +838,12 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   }, [owned]);
   const haveEquip = (key) => owned.includes(key) && equip[key] !== false; // not owned = never available
   /* only build workouts from exercises whose equipment is on hand */
-  const availEx = useMemo(() => allEx.filter((e) => !e.eq || haveEquip(e.eq)), [allEx, equip, owned]);
+  /* gyms have everything — the gym tab ignores home equipment ownership */
+  const availEx = useMemo(
+    () => (venue === "gym" ? allEx : allEx.filter((e) => !e.eq || haveEquip(e.eq))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allEx, equip, owned, venue]
+  );
   /* difficulty-filtered pool that feeds the full-workout builder. Rebuilds
      immediately when a level is edited (levelOver is baked into allEx). */
   const levelPool = useMemo(() => filterByLevel(availEx, workoutLevel), [availEx, workoutLevel]);
@@ -2013,9 +2025,9 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
         <div style={{ display: "flex", gap: 6, padding: "0 16px 14px" }}>
           {[
-            ["home", "🏠 HOME", "linear-gradient(135deg, #4F7DF0 0%, #7B5BE6 100%)"],
-            ["gym", "🏋 GYM", "linear-gradient(135deg, #0FA3A3 0%, #17B8A6 100%)"],
-            ["go", "🔥 ON THE GO", "linear-gradient(135deg, #F1762A 0%, #E8433F 100%)"],
+            ["home", "HOME", "linear-gradient(135deg, #4F7DF0 0%, #7B5BE6 100%)"],
+            ["gym", "GYM", "linear-gradient(135deg, #0FA3A3 0%, #17B8A6 100%)"],
+            ["go", "ON THE GO", "linear-gradient(135deg, #F1762A 0%, #E8433F 100%)"],
           ].map(([k, label, grad]) => (
             <button key={k} onClick={() => setHomeTab(k)}
               style={{
@@ -2024,13 +2036,15 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                 background: homeTab === k ? grad : "#FFFFFF",
                 color: homeTab === k ? "#FFFFFF" : "#3D4756",
                 boxShadow: homeTab === k ? "0 4px 12px rgba(27,36,48,0.18)" : "0 1px 3px rgba(27,36,48,0.06)",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
               }}>
+              <ActIcon a={TAB_ICONS[k]} size={15} />
               {label}
             </button>
           ))}
         </div>
 
-        {homeTab !== "go" && (
+        {homeTab === "home" && ( /* gym tab skips this — gyms have everything */
         <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "10px 14px", margin: "0 16px 14px" }}>
           <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, marginBottom: 8 }}>
             TODAY'S EQUIPMENT — TAP WHAT YOU HAVE
