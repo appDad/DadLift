@@ -100,13 +100,14 @@ export function SummaryBody({ m }) {
         {m.recent.length === 0 && (
           <div style={{ fontSize: 13, color: "#9AA3B0" }}>No workouts logged yet.</div>
         )}
-        {m.recent.map((h) => (
-          <div key={h.d} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #E4E7EC", fontSize: 13 }}>
+        {m.recent.map((h, i) => (
+          // key includes index — an app workout and a logged activity can share a date
+          <div key={h.d + "-" + i} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #E4E7EC", fontSize: 13 }}>
             <div style={{ color: "#3D4756" }}>
               {new Date(h.d + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
             </div>
             <div style={{ color: "#6C7686" }}>
-              {h.mode} · {h.ex} sets{h.reps ? ` · ${h.reps} reps` : ""}
+              {h.act ? `${h.act}${h.mins ? ` · ${h.mins}m` : ""}` : `${h.mode} · ${h.ex} sets${h.reps ? ` · ${h.reps} reps` : ""}`}
             </div>
           </div>
         ))}

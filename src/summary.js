@@ -80,7 +80,12 @@ export function computeSummary(history) {
   const recent = [...history]
     .sort((a, b) => (a.d < b.d ? 1 : -1))
     .slice(0, 10)
-    .map((h) => ({ d: h.d, mode: h.mode || "circuit", ex: exDoneOf(h), reps: h.totalReps || 0 }));
+    .map((h) => ({
+      d: h.d, mode: h.mode || "circuit", ex: exDoneOf(h), reps: h.totalReps || 0,
+      // logged non-app activities render as "Hiking · 45m" instead of sets
+      act: h.mode === "activity" ? (h.exercises || [])[0] || "Activity" : null,
+      mins: h.mins || 0,
+    }));
 
   return {
     weeks, workoutsPerWeek, exercisesPerWeek, repsPerWeek, groupTotals, recent,

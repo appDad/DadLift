@@ -3,6 +3,7 @@ import { loadJSON, saveJSON } from "./storage";
 import { coachModel } from "./firebase";
 import { POSES, GROUPS, BUILTIN, EQUIPMENT, DEFAULT_EQUIP, normalizeEquip, inferEquip, famOf, levelOf, LEVEL_LABEL, extendEquipment, equipSlug, buildAddPrompt, validateExercise, resolveFrames } from "./exercises";
 import { loadExOverrides, saveExOverrides } from "./exoverrides";
+import { ACTIVITIES } from "./activities";
 import { loadEquipExtensions, saveEquipExtensions } from "./catalog";
 import { loadCommunity, publishExercise, unpublishExercise } from "./community";
 import { ymd, calcStreak, thisWeekCount } from "./summary";
@@ -706,6 +707,9 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [quickEx, setQuickEx] = useState(null); // active do-anywhere list, null = today's workout (also the "is burn" flag)
   const [sessionIds, setSessionIds] = useState(null); // frozen MEMBERSHIP (ids) for the running session; objects stay live so edits still show
   const [settingsModal, setSettingsModal] = useState(false); // full settings shown as a popup over the paused player
+  const [actSel, setActSel] = useState(null); // activity being logged on the log-activity screen
+  const [actMins, setActMins] = useState(45); // sticky between logs — most people repeat durations
+  const [actDate, setActDate] = useState(""); // ymd; can be a PAST date to backfill missed days
   const [phase, setPhase] = useState("work"); // work | rest | ready (get-set countdown, circuit only)
   const [timeLeft, setTimeLeft] = useState(0);
   const [rep, setRep] = useState(0);
@@ -1143,6 +1147,28 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     if (share.on && share.id) publishSnapshot(user.uid, firstName(), [], share.id, weightExtra());
   };
 
+  /* log a non-app activity (hike, run…) as a real history entry, so it counts
+     toward streak/weekly/totals exactly like an app workout. The date can be a
+     PAST day to backfill something you did but never logged. */
+  const logActivity = () => {
+    const a = ACTIVITIES.find((x) => x.id === actSel);
+    const d = actDate || ymd(today);
+    if (!a || d > ymd(today)) return;
+    const entry = {
+      d, ts: Date.now(), mode: "activity", act: a.id, mins: actMins,
+      n: 1, rounds: 1, exDone: 1, totalReps: 0, totalSecs: actMins * 60,
+      groups: a.grp ? { [a.grp]: 1 } : {},
+      exercises: [a.name],
+    };
+    const newHist = [...history, entry]; // appends — never clobbers the day's app workout
+    setHistory(newHist);
+    saveJSON("history", newHist);
+    if (share.on && share.id) publishSnapshot(user.uid, firstName(), newHist, share.id, weightExtra());
+    beep(1200, 0.2);
+    setActSel(null);
+    setScreen("home");
+  };
+
   /* ----- today's-workout tweaks: reshuffle + thumb-out ----- */
   const reshuffle = () => {
     const n = shuffleN + 1;
@@ -1433,7 +1459,9 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         .filter((r) => r.unit === "reps" && r.value > 0 && !r.partial && typeof r.target === "number")
         .map((r) => [r.id, r.value, r.target]),
     };
-    const newHist = [...history.filter((h) => h.d !== entry.d), entry];
+    // one APP workout per day (re-saving replaces it) — but logged activities
+    // (hikes, runs) on the same day are separate and must survive
+    const newHist = [...history.filter((h) => h.d !== entry.d || h.mode === "activity"), entry];
     setHistory(newHist);
     saveJSON("history", newHist);
     if (share.on && share.id) publishSnapshot(user.uid, firstName(), newHist, share.id, weightExtra());
@@ -1599,6 +1627,68 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   if (screen === "validate" && isAdmin) {
     return <Validate allEx={allEx} exOverrides={exOverrides} onMakeGlobal={setAdminOverride} onCount={setReviewCount}
       nav={<NavBar current="validate" onNav={setScreen} weighDue={weighDue} />} />;
+  }
+
+  /* ---------- LOG A NON-APP ACTIVITY ---------- */
+  if (screen === "logact") {
+    const sel = ACTIVITIES.find((x) => x.id === actSel);
+    const dateOk = (actDate || ymd(today)) <= ymd(today);
+    return (
+      <div style={S.app}>
+        <style>{FONT_CSS}</style>
+        <NavBar current="home" onNav={setScreen} weighDue={weighDue} />
+        <div style={{ padding: "20px 20px 8px" }}>
+          <div style={{ fontFamily: DISPLAY, fontSize: 26, fontWeight: 700, letterSpacing: 1 }}>LOG AN ACTIVITY</div>
+          <div style={{ fontSize: 13, color: "#6C7686", marginTop: 4, lineHeight: 1.5 }}>
+            Moved outside the app — a hike, a run, a game? It counts. Logging it keeps your streak and stats honest.
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "10px 16px 24px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+            {ACTIVITIES.map((a) => {
+              const on = actSel === a.id;
+              return (
+                <button key={a.id} onClick={() => setActSel(on ? null : a.id)}
+                  style={{
+                    border: "none", borderRadius: 12, cursor: "pointer", padding: "12px 4px 10px",
+                    background: on ? "#1B2430" : "#FFFFFF", color: on ? "#F5F6F8" : "#3D4756",
+                    boxShadow: on ? "0 4px 12px rgba(27,36,48,0.25)" : "0 1px 3px rgba(27,36,48,0.06)",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                  }}>
+                  <span style={{ fontSize: 26 }}>{a.icon}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700 }}>{a.name}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "4px 16px", boxShadow: "0 1px 3px rgba(27,36,48,0.06)" }}>
+            <SetupRow label="HOW LONG">
+              <MiniStep value={actMins} unit="m" min={15} max={300} step={15} onChange={setActMins} />
+            </SetupRow>
+            <SetupRow label={
+              <div>WHEN
+                <div style={{ fontSize: 9, fontWeight: 400, letterSpacing: 0.3, color: "#9AA3B0", marginTop: 2 }}>
+                  pick a past day to backfill
+                </div>
+              </div>
+            } last>
+              <input type="date" value={actDate || ymd(today)} max={ymd(today)}
+                onChange={(e) => setActDate(e.target.value)}
+                style={{
+                  background: "#EFF1F5", color: "#1B2430", border: "1px solid #DDE2E9",
+                  borderRadius: 10, padding: "10px 12px", fontSize: 14, fontFamily: "inherit",
+                }} />
+            </SetupRow>
+          </div>
+
+          <button onClick={logActivity} disabled={!sel || !dateOk}
+            style={{ ...S.startBtn, opacity: sel && dateOk ? 1 : 0.4 }}>
+            {sel ? `SAVE — ${sel.name.toUpperCase()} · ${actMins} MIN` : "PICK AN ACTIVITY"}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   /* ---------- WEIGH-IN ---------- */
@@ -1776,13 +1866,22 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
         <div style={{ ...S.header, padding: "14px 20px 14px", display: "flex", alignItems: "center", gap: 12 }}>
           <img src="/icons/dadlift-icon-192.png" alt="" width={56} height={56} style={{ borderRadius: "50%", flexShrink: 0 }} />
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={S.eyebrow}>{dateStr}</div>
             <div style={S.title}>DADLIFT</div>
             <div style={S.sub}>
               {allEx.length} in library · {mode === "hiit" ? `HIIT ${hiit[0]}s on / ${hiit[1]}s off` : `reps today: ${workout.reps} · ${tempo}s/rep`}
             </div>
           </div>
+          <button onClick={() => { setActSel(null); setActDate(ymd(today)); setScreen("logact"); }}
+            style={{
+              marginLeft: "auto", alignSelf: "flex-start", flexShrink: 0, border: "none", borderRadius: 10, cursor: "pointer",
+              background: "linear-gradient(135deg, #2FA671, #37B98A)", color: "#FFFFFF",
+              padding: "9px 12px", fontWeight: 700, fontSize: 12, letterSpacing: 0.5, lineHeight: 1.3,
+              boxShadow: "0 3px 8px rgba(47,166,113,0.3)", textAlign: "center",
+            }}>
+            ＋ LOG<br />ACTIVITY
+          </button>
         </div>
 
         <div style={{ display: "flex", gap: 10, padding: "0 16px 14px" }}>
