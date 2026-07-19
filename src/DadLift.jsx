@@ -3,7 +3,7 @@ import { loadJSON, saveJSON } from "./storage";
 import { coachModel } from "./firebase";
 import { POSES, GROUPS, BUILTIN, EQUIPMENT, DEFAULT_EQUIP, normalizeEquip, inferEquip, famOf, levelOf, LEVEL_LABEL, extendEquipment, equipSlug, buildAddPrompt, validateExercise, resolveFrames } from "./exercises";
 import { loadExOverrides, saveExOverrides } from "./exoverrides";
-import { ACTIVITIES, CUSTOM_ACT_ICON } from "./activities";
+import { ACTIVITIES, CUSTOM_ICONS, CUSTOM_ACT_ICON } from "./activities";
 import { loadEquipExtensions, saveEquipExtensions } from "./catalog";
 import { loadCommunity, publishExercise, unpublishExercise } from "./community";
 import { ymd, calcStreak, thisWeekCount } from "./summary";
@@ -723,6 +723,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [actDate, setActDate] = useState(""); // ymd; can be a PAST date to backfill missed days
   const [actNote, setActNote] = useState(""); // name input while creating a custom activity
   const [actAdding, setActAdding] = useState(false); // "+" tile tapped — naming a new custom activity
+  const [actIcon, setActIcon] = useState("dumbbell"); // icon key chosen for the new custom activity
   const [myActs, setMyActs] = useState([]); // personal custom activities [{id, name}] — persist on the grid
   const [phase, setPhase] = useState("work"); // work | rest | ready (get-set countdown, circuit only)
   const [timeLeft, setTimeLeft] = useState(0);
@@ -1188,13 +1189,14 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const addMyActivity = () => {
     const name = actNote.trim().slice(0, 24);
     if (!name) return;
-    const a = { id: "c_" + Date.now().toString(36), name };
+    const a = { id: "c_" + Date.now().toString(36), name, icon: actIcon };
     const next = [...myActs, a];
     setMyActs(next);
     saveJSON("myacts", next);
     setActSel(a.id); // freshly added — almost certainly what they're logging
     setActAdding(false);
     setActNote("");
+    setActIcon("dumbbell");
   };
   const removeMyActivity = (id) => {
     const next = myActs.filter((a) => a.id !== id);
@@ -1696,7 +1698,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                       ✕
                     </span>
                   )}
-                  <ActIcon a={custom ? CUSTOM_ACT_ICON : a} />
+                  <ActIcon a={custom ? (CUSTOM_ICONS[a.icon] || CUSTOM_ACT_ICON) : a} />
                   <span style={{ fontSize: 12, fontWeight: 700, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
                 </button>
               );
@@ -1713,20 +1715,34 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           </div>
 
           {actAdding && (
-            <div style={{ display: "flex", gap: 8 }}>
-              <input
-                value={actNote} onChange={(e) => setActNote(e.target.value)} maxLength={24} autoFocus
-                onKeyDown={(e) => e.key === "Enter" && addMyActivity()}
-                placeholder="name it — e.g. kayaking, pickup soccer"
-                style={{
-                  flex: 1, boxSizing: "border-box", background: "#FFFFFF", color: "#1B2430",
-                  border: "1px solid #DDE2E9", borderRadius: 12, padding: "13px 14px", fontSize: 14,
-                  boxShadow: "0 1px 3px rgba(27,36,48,0.06)",
-                }} />
-              <button onClick={addMyActivity} disabled={!actNote.trim()}
-                style={{ ...S.pill, flexShrink: 0, padding: "0 18px", background: "#1B2430", color: "#F5F6F8", opacity: actNote.trim() ? 1 : 0.4 }}>
-                ADD
-              </button>
+            <div style={{ background: "#FFFFFF", borderRadius: 12, padding: 12, boxShadow: "0 1px 3px rgba(27,36,48,0.06)", display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  value={actNote} onChange={(e) => setActNote(e.target.value)} maxLength={24} autoFocus
+                  onKeyDown={(e) => e.key === "Enter" && addMyActivity()}
+                  placeholder="name it — e.g. walking the dog"
+                  style={{
+                    flex: 1, minWidth: 0, boxSizing: "border-box", background: "#EFF1F5", color: "#1B2430",
+                    border: "1px solid #DDE2E9", borderRadius: 12, padding: "13px 14px", fontSize: 14,
+                  }} />
+                <button onClick={addMyActivity} disabled={!actNote.trim()}
+                  style={{ ...S.pill, flexShrink: 0, padding: "0 18px", background: "#1B2430", color: "#F5F6F8", opacity: actNote.trim() ? 1 : 0.4 }}>
+                  ADD
+                </button>
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {Object.entries(CUSTOM_ICONS).map(([k, ic]) => (
+                  <button key={k} onClick={() => setActIcon(k)}
+                    style={{
+                      border: "none", borderRadius: 10, cursor: "pointer", width: 44, height: 44,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      background: actIcon === k ? "#1B2430" : "#EFF1F5",
+                      color: actIcon === k ? "#F5F6F8" : "#3D4756",
+                    }}>
+                    <ActIcon a={ic} size={24} />
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -1941,7 +1957,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               {allEx.length} in library · {mode === "hiit" ? `HIIT ${hiit[0]}s on / ${hiit[1]}s off` : `reps today: ${workout.reps} · ${tempo}s/rep`}
             </div>
           </div>
-          <button onClick={() => { setActSel(null); setActNote(""); setActAdding(false); setActDate(ymd(today)); setScreen("logact"); }}
+          <button onClick={() => { setActSel(null); setActNote(""); setActAdding(false); setActIcon("dumbbell"); setActDate(ymd(today)); setScreen("logact"); }}
             style={{
               marginLeft: "auto", alignSelf: "flex-start", flexShrink: 0, border: "none", borderRadius: 10, cursor: "pointer",
               background: "linear-gradient(135deg, #2FA671, #37B98A)", color: "#FFFFFF",
