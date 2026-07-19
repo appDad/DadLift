@@ -212,6 +212,17 @@ function Dumbbell({ x, y, ang = 0 }) {
   );
 }
 
+/* monotone outline icon for a non-app activity — stroke follows text color */
+function ActIcon({ a, size = 26 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      {(a.circles || []).map((c, i) => <circle key={"c" + i} cx={c[0]} cy={c[1]} r={c[2]} />)}
+      {(a.paths || []).map((d, i) => <path key={"p" + i} d={d} />)}
+    </svg>
+  );
+}
+
 export function Figure({ frames, color, size = 160 }) {
   const [f, setF] = useState(0);
   useEffect(() => {
@@ -710,6 +721,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [actSel, setActSel] = useState(null); // activity being logged on the log-activity screen
   const [actMins, setActMins] = useState(45); // sticky between logs — most people repeat durations
   const [actDate, setActDate] = useState(""); // ymd; can be a PAST date to backfill missed days
+  const [actNote, setActNote] = useState(""); // "Other" only — what the activity actually was
   const [phase, setPhase] = useState("work"); // work | rest | ready (get-set countdown, circuit only)
   const [timeLeft, setTimeLeft] = useState(0);
   const [rep, setRep] = useState(0);
@@ -1154,11 +1166,13 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     const a = ACTIVITIES.find((x) => x.id === actSel);
     const d = actDate || ymd(today);
     if (!a || d > ymd(today)) return;
+    // "Other" carries the user's own description ("Kayaking") as the shown name
+    const label = (a.id === "other" && actNote.trim()) ? actNote.trim().slice(0, 30) : a.name;
     const entry = {
       d, ts: Date.now(), mode: "activity", act: a.id, mins: actMins,
       n: 1, rounds: 1, exDone: 1, totalReps: 0, totalSecs: actMins * 60,
       groups: a.grp ? { [a.grp]: 1 } : {},
-      exercises: [a.name],
+      exercises: [label],
     };
     const newHist = [...history, entry]; // appends — never clobbers the day's app workout
     setHistory(newHist);
@@ -1166,6 +1180,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     if (share.on && share.id) publishSnapshot(user.uid, firstName(), newHist, share.id, weightExtra());
     beep(1200, 0.2);
     setActSel(null);
+    setActNote("");
     setScreen("home");
   };
 
@@ -1655,12 +1670,23 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                     boxShadow: on ? "0 4px 12px rgba(27,36,48,0.25)" : "0 1px 3px rgba(27,36,48,0.06)",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
                   }}>
-                  <span style={{ fontSize: 26 }}>{a.icon}</span>
+                  <ActIcon a={a} />
                   <span style={{ fontSize: 12, fontWeight: 700 }}>{a.name}</span>
                 </button>
               );
             })}
           </div>
+
+          {actSel === "other" && (
+            <input
+              value={actNote} onChange={(e) => setActNote(e.target.value)} maxLength={30}
+              placeholder="what was it? — e.g. kayaking, pickup soccer"
+              style={{
+                boxSizing: "border-box", width: "100%", background: "#FFFFFF", color: "#1B2430",
+                border: "1px solid #DDE2E9", borderRadius: 12, padding: "13px 14px", fontSize: 14,
+                boxShadow: "0 1px 3px rgba(27,36,48,0.06)",
+              }} />
+          )}
 
           <div style={{ background: "#FFFFFF", borderRadius: 12, padding: "4px 16px", boxShadow: "0 1px 3px rgba(27,36,48,0.06)" }}>
             <SetupRow label="HOW LONG">
@@ -1684,7 +1710,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
 
           <button onClick={logActivity} disabled={!sel || !dateOk}
             style={{ ...S.startBtn, opacity: sel && dateOk ? 1 : 0.4 }}>
-            {sel ? `SAVE — ${sel.name.toUpperCase()} · ${actMins} MIN` : "PICK AN ACTIVITY"}
+            {sel ? `SAVE — ${(sel.id === "other" && actNote.trim() ? actNote.trim() : sel.name).toUpperCase()} · ${actMins} MIN` : "PICK AN ACTIVITY"}
           </button>
         </div>
       </div>
@@ -1873,7 +1899,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
               {allEx.length} in library · {mode === "hiit" ? `HIIT ${hiit[0]}s on / ${hiit[1]}s off` : `reps today: ${workout.reps} · ${tempo}s/rep`}
             </div>
           </div>
-          <button onClick={() => { setActSel(null); setActDate(ymd(today)); setScreen("logact"); }}
+          <button onClick={() => { setActSel(null); setActNote(""); setActDate(ymd(today)); setScreen("logact"); }}
             style={{
               marginLeft: "auto", alignSelf: "flex-start", flexShrink: 0, border: "none", borderRadius: 10, cursor: "pointer",
               background: "linear-gradient(135deg, #2FA671, #37B98A)", color: "#FFFFFF",
