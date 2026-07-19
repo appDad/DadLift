@@ -38,7 +38,7 @@ export const ACTIVITIES = [
     paths: ["M4 20 L12 6 L20 20 Z", "M12 6 V2.5", "M12 2.5 H15.5 V5 H12"],
   },
   {
-    id: "sport", name: "Sports", grp: "legs",
+    id: "sport", name: "Sports", grp: "core",
     circles: [[12, 12, 8]],
     paths: ["M4 12 H20", "M6.5 6.5 Q10 12 6.5 17.5", "M17.5 6.5 Q14 12 17.5 17.5"],
   },

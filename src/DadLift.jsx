@@ -724,6 +724,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [actNote, setActNote] = useState(""); // name input while creating a custom activity
   const [actAdding, setActAdding] = useState(false); // "+" tile tapped — naming a new custom activity
   const [actIcon, setActIcon] = useState("dumbbell"); // icon key chosen for the new custom activity
+  const [actGrp, setActGrp] = useState(null); // muscle group the new custom activity credits (null = none)
   const [myActs, setMyActs] = useState([]); // personal custom activities [{id, name}] — persist on the grid
   const [phase, setPhase] = useState("work"); // work | rest | ready (get-set countdown, circuit only)
   const [timeLeft, setTimeLeft] = useState(0);
@@ -1189,7 +1190,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const addMyActivity = () => {
     const name = actNote.trim().slice(0, 24);
     if (!name) return;
-    const a = { id: "c_" + Date.now().toString(36), name, icon: actIcon };
+    const a = { id: "c_" + Date.now().toString(36), name, icon: actIcon, grp: actGrp || undefined };
     const next = [...myActs, a];
     setMyActs(next);
     saveJSON("myacts", next);
@@ -1197,6 +1198,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     setActAdding(false);
     setActNote("");
     setActIcon("dumbbell");
+    setActGrp(null);
   };
   const removeMyActivity = (id) => {
     const next = myActs.filter((a) => a.id !== id);
@@ -1743,6 +1745,21 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                   </button>
                 ))}
               </div>
+              <div style={{ fontSize: 10, letterSpacing: 1, color: "#9AA3B0", fontWeight: 700 }}>COUNTS TOWARD (OPTIONAL)</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {Object.entries(GROUPS).map(([gk, gv]) => {
+                  const on = actGrp === gk;
+                  return (
+                    <button key={gk} onClick={() => setActGrp(on ? null : gk)}
+                      style={{
+                        ...S.pill, padding: "7px 12px", fontSize: 12,
+                        background: on ? gv.color : "#EFF1F5", color: on ? "#FFFFFF" : "#6C7686",
+                      }}>
+                      {gv.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -1948,23 +1965,20 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         <style>{FONT_CSS}</style>
         <NavBar current="home" onNav={setScreen} weighDue={weighDue} />
 
-        <div style={{ ...S.header, padding: "14px 20px 14px", display: "flex", alignItems: "center", gap: 12 }}>
-          <img src="/icons/dadlift-icon-192.png" alt="" width={56} height={56} style={{ borderRadius: "50%", flexShrink: 0 }} />
+        {/* calm header: date + wordmark + one quiet action. The logo and the
+            library/reps info line were noise — the nav bar already brands. */}
+        <div style={{ padding: "16px 20px 12px", display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ minWidth: 0 }}>
             <div style={S.eyebrow}>{dateStr}</div>
             <div style={S.title}>DADLIFT</div>
-            <div style={S.sub}>
-              {allEx.length} in library · {mode === "hiit" ? `HIIT ${hiit[0]}s on / ${hiit[1]}s off` : `reps today: ${workout.reps} · ${tempo}s/rep`}
-            </div>
           </div>
-          <button onClick={() => { setActSel(null); setActNote(""); setActAdding(false); setActIcon("dumbbell"); setActDate(ymd(today)); setScreen("logact"); }}
+          <button onClick={() => { setActSel(null); setActNote(""); setActAdding(false); setActIcon("dumbbell"); setActGrp(null); setActDate(ymd(today)); setScreen("logact"); }}
             style={{
-              marginLeft: "auto", alignSelf: "flex-start", flexShrink: 0, border: "none", borderRadius: 10, cursor: "pointer",
-              background: "linear-gradient(135deg, #2FA671, #37B98A)", color: "#FFFFFF",
-              padding: "9px 12px", fontWeight: 700, fontSize: 12, letterSpacing: 0.5, lineHeight: 1.3,
-              boxShadow: "0 3px 8px rgba(47,166,113,0.3)", textAlign: "center",
+              marginLeft: "auto", flexShrink: 0, border: "none", borderRadius: 999, cursor: "pointer",
+              background: "#FFFFFF", color: "#3D4756", boxShadow: "0 1px 3px rgba(27,36,48,0.08)",
+              padding: "9px 14px", fontWeight: 700, fontSize: 12, letterSpacing: 0.5, whiteSpace: "nowrap",
             }}>
-            ＋ LOG<br />ACTIVITY
+            <span style={{ color: "#2FA671", fontWeight: 800 }}>＋</span> LOG ACTIVITY
           </button>
         </div>
 
