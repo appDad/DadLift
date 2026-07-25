@@ -760,6 +760,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [ratings, setRatings] = useState({}); // exercise id -> 1 | 0 | -1
   const [uniOverride, setUniOverride] = useState({}); // exercise id -> true/false two-pass override
   const [cadence, setCadence] = useState({}); // exercise id -> seconds per rep (personal)
+  const [cadOfs, setCadOfs] = useState({}); // "exId|round" -> press-count speed offset (FASTER twice = -2), personal
   const [weights, setWeights] = useState([]); // [{ d: ymd, w: pounds }]
   const [shareWeight, setShareWeight] = useState(false); // include weight change on the public page
   const [weighInput, setWeighInput] = useState("");
@@ -950,11 +951,25 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const repTargetOf = (e, r = round) =>
     Math.max(4, Math.round((r <= 1 ? (repTargets[e.id] || workout.reps) : adaptTarget(e.id, workout.reps, history, r)) * sessionScale));
   /* counting pace scales with the target so a raised target means a FASTER
-     count, not a longer set — reps × cadence stays ≈ the day's base set time */
+     count, not a longer set — reps × cadence stays ≈ the day's base set time.
+     On top of that, the in-workout SLOWER/FASTER presses are remembered per
+     exercise AND round (each press = ±0.5s of base pace). */
+  const cadOfsOf = (e, r = round) => cadOfs[`${e.id}|${r}`] || 0;
   const effCadOf = (e) => {
     const base = Math.max(4, Math.round(workout.reps * sessionScale));
     const factor = Math.min(1.5, Math.max(0.5, base / repTargetOf(e)));
-    return Math.max(1, +(cadenceOf(e) * factor).toFixed(2));
+    const manual = Math.min(6, Math.max(1, cadenceOf(e) + cadOfsOf(e) * 0.5));
+    return Math.max(1, +(manual * factor).toFixed(2));
+  };
+  /* one press = one saved step for this exercise+round (FASTER twice → -2) */
+  const bumpCad = (dir) => {
+    const key = `${ex.id}|${round}`;
+    const v = Math.max(-8, Math.min(8, (cadOfs[key] || 0) + dir));
+    const next = { ...cadOfs, [key]: v };
+    if (!v) delete next[key];
+    setCadOfs(next);
+    saveJSON("cadofs", next);
+    beep(dir < 0 ? 990 : 660, 0.06); // quick audible nudge: high = faster, low = slower
   };
   const say = (t) => { if (voiceOn) speak(t); };
 
@@ -964,6 +979,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       setRatings(await loadJSON("ratings", {}));
       setUniOverride(await loadJSON("unilateral", {}));
       setCadence(await loadJSON("cadence", {}));
+      setCadOfs(await loadJSON("cadofs", {}));
       setMyActs(await loadJSON("myacts", []));
       const wt = await loadJSON("weights", { list: [], share: false });
       setWeights(wt.list || []);
@@ -1628,7 +1644,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     }, cad * 1000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, phase, idx, round, mode, paused, side, ex && ex.type, ex && cadenceOf(ex)]);
+  }, [screen, phase, idx, round, mode, paused, side, ex && ex.type, ex && cadenceOf(ex), ex && cadOfsOf(ex)]);
 
   const launch = (list) => {
     setSessionIds(list.map((e) => e.id)); // freeze which exercises this session runs
@@ -2419,16 +2435,6 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#9AA3B0", fontWeight: 700 }}>ADJUSTING JUST THIS EXERCISE</div>
         <div style={{ fontFamily: DISPLAY, fontSize: 24, fontWeight: 700, color: g.color, marginTop: 3, lineHeight: 1.1 }}>{ex.name}</div>
       </div>
-      {ex.type === "reps" && (
-        <div>
-          <div style={subLbl}>REP SPEED</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button onClick={() => setCad(ex.id, cadenceOf(ex) + 0.5)} style={{ ...exBtn, flex: 1, background: "#EFF1F5", color: "#3D4756" }}>🐢 SLOWER</button>
-            <div style={{ fontFamily: DISPLAY, fontSize: 18, fontWeight: 700, color: "#1B2430", minWidth: 66, textAlign: "center" }}>{effCadOf(ex)}s/rep</div>
-            <button onClick={() => setCad(ex.id, cadenceOf(ex) - 0.5)} style={{ ...exBtn, flex: 1, background: "#EFF1F5", color: "#3D4756" }}>🐇 FASTER</button>
-          </div>
-        </div>
-      )}
       <div>
         <div style={subLbl}>SIDES</div>
         <button onClick={togglePlayerUni}
@@ -2552,6 +2558,24 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           style={{ ...S.startBtn, background: paused ? "#2FA671" : "#E4E7EC", color: paused ? "#FFFFFF" : "#1B2430" }}>
           {paused ? "▶ RESUME" : "❚❚ PAUSE"}
         </button>
+        {!isRest && !isReady && mode !== "hiit" && ex.type === "reps" && (
+          <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+            <button onClick={() => bumpCad(1)}
+              style={{ ...S.startBtn, flex: 1, fontSize: 17, padding: "16px 0", background: "#EFF1F5", color: "#3D4756" }}>
+              − SLOWER
+            </button>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 72 }}>
+              <div style={{ fontFamily: DISPLAY, fontSize: 17, fontWeight: 700, color: "#1B2430", lineHeight: 1 }}>{effCadOf(ex)}s</div>
+              <div style={{ fontSize: 9, letterSpacing: 0.5, color: "#9AA3B0", marginTop: 2 }}>
+                {cadOfsOf(ex) !== 0 ? `R${round} saved ${cadOfsOf(ex) > 0 ? "+" : ""}${cadOfsOf(ex)}` : "PER REP"}
+              </div>
+            </div>
+            <button onClick={() => bumpCad(-1)}
+              style={{ ...S.startBtn, flex: 1, fontSize: 17, padding: "16px 0", background: "#DCE7FB", color: "#2456B3" }}>
+              ＋ FASTER
+            </button>
+          </div>
+        )}
         {!isRest && !isReady && mode !== "hiit" && ex.type === "reps" && (
           <button onClick={() => (side === "L" ? switchToRight() : advance())} style={S.startBtn}>
             {side === "L" ? "LEFT DONE — SWITCH SIDES" : "DONE — NEXT"}
