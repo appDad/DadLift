@@ -128,15 +128,23 @@ function buildWorkout(date, allEx, emphasis, ratings = {}, nonce = 0, slots = 8,
 /* ============ adaptive rep targets ============
    Look at the last 4 honestly-recorded circuit sets of an exercise (partial
    sets from mid-exercise quits are excluded at save time). Consistently over
-   target -> raise it, consistently under -> lower it. */
-function adaptTarget(exId, base, history) {
-  const recent = [];
-  for (let i = history.length - 1; i >= 0 && recent.length < 4; i--) {
-    for (const s of history[i].sets || []) {
-      if (s[0] === exId) recent.push(s); // [id, value, target]
-      if (recent.length >= 4) break;
+   target -> raise it, consistently under -> lower it.
+   Round-aware: round 2 is fatigued, so its target adapts from PAST ROUND-2
+   sets, not fresh round-1 numbers. Legacy tuples without a round count as 1;
+   with too little same-round data we fall back to any round. */
+function adaptTarget(exId, base, history, round = 1) {
+  const collect = (matchRound) => {
+    const out = [];
+    for (let i = history.length - 1; i >= 0 && out.length < 4; i--) {
+      for (const s of history[i].sets || []) {
+        if (s[0] === exId && (!matchRound || (s[3] || 1) === round)) out.push(s); // [id, value, target, round?]
+        if (out.length >= 4) break;
+      }
     }
-  }
+    return out;
+  };
+  let recent = collect(true);
+  if (recent.length < 2) recent = collect(false);
   if (recent.length < 2) return base;
   const avgDelta = recent.reduce((t, s) => t + (s[1] - s[2]), 0) / recent.length;
   let adj = 0;
@@ -937,7 +945,17 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     for (const e of [...exList, ...anywhereWorkout]) if (e.type === "reps") t[e.id] = adaptTarget(e.id, workout.reps, history);
     return t;
   }, [exList, anywhereWorkout, workout.reps, history]);
-  const repTargetOf = (e) => Math.max(4, Math.round((repTargets[e.id] || workout.reps) * sessionScale));
+  /* target for a specific round: round 1 comes from the precomputed map (home
+     cards show it too); later rounds adapt from their own round's history */
+  const repTargetOf = (e, r = round) =>
+    Math.max(4, Math.round((r <= 1 ? (repTargets[e.id] || workout.reps) : adaptTarget(e.id, workout.reps, history, r)) * sessionScale));
+  /* counting pace scales with the target so a raised target means a FASTER
+     count, not a longer set — reps × cadence stays ≈ the day's base set time */
+  const effCadOf = (e) => {
+    const base = Math.max(4, Math.round(workout.reps * sessionScale));
+    const factor = Math.min(1.5, Math.max(0.5, base / repTargetOf(e)));
+    return Math.max(1, +(cadenceOf(e) * factor).toFixed(2));
+  };
   const say = (t) => { if (voiceOn) speak(t); };
 
   useEffect(() => {
@@ -1464,7 +1482,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           name: e.name,
           grp: e.grp,
           unit: e.type === "time" ? "s" : "reps",
-          target: e.type === "time" ? (mode === "hiit" ? hiit[0] : secsOf(e)) : (mode === "hiit" ? "max" : repTargetOf(e)),
+          target: e.type === "time" ? (mode === "hiit" ? hiit[0] : secsOf(e)) : (mode === "hiit" ? "max" : repTargetOf(e, r)),
           round: r,
           value: k < log.length ? log[k].value : 0,
           partial: k < log.length ? !!log[k].partial : false,
@@ -1510,7 +1528,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       // skipping partial (quit/skipped mid-exercise) sets
       sets: summaryRows
         .filter((r) => r.unit === "reps" && r.value > 0 && !r.partial && typeof r.target === "number")
-        .map((r) => [r.id, r.value, r.target]),
+        .map((r) => [r.id, r.value, r.target, r.round]), // round matters — fatigue makes round 2 its own baseline
     };
     // one APP workout per day (re-saving replaces it) — but logged activities
     // (hikes, runs) on the same day are separate and must survive
@@ -1591,7 +1609,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   useEffect(() => {
     if (screen !== "player" || paused || phase !== "work" || mode === "hiit" || !ex || ex.type !== "reps") return;
     const target = repTargetOf(ex);
-    const cad = cadenceOf(ex); // seconds per rep for THIS exercise
+    const cad = effCadOf(ex); // pace auto-scales so a bigger target doesn't stretch the set
     const t = setInterval(() => {
       setRep((r) => {
         const next = r + 1;
@@ -2406,7 +2424,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           <div style={subLbl}>REP SPEED</div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button onClick={() => setCad(ex.id, cadenceOf(ex) + 0.5)} style={{ ...exBtn, flex: 1, background: "#EFF1F5", color: "#3D4756" }}>🐢 SLOWER</button>
-            <div style={{ fontFamily: DISPLAY, fontSize: 18, fontWeight: 700, color: "#1B2430", minWidth: 66, textAlign: "center" }}>{cadenceOf(ex)}s/rep</div>
+            <div style={{ fontFamily: DISPLAY, fontSize: 18, fontWeight: 700, color: "#1B2430", minWidth: 66, textAlign: "center" }}>{effCadOf(ex)}s/rep</div>
             <button onClick={() => setCad(ex.id, cadenceOf(ex) - 0.5)} style={{ ...exBtn, flex: 1, background: "#EFF1F5", color: "#3D4756" }}>🐇 FASTER</button>
           </div>
         </div>
