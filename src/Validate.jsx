@@ -7,13 +7,11 @@ import { styles, DISPLAY, FONT_CSS } from "./theme";
 /* Admin-only review queue: aggregates the tweaks people made to exercises on
    their own (difficulty, counted/timed, both-sides) and lets the head validator
    promote the ones worth keeping to the global default for everyone. */
-const PROP_LABEL = { level: "Difficulty", type: "Counted / timed", uni: "Both sides" };
-const LEVEL_NAME = { beg: "Beginner", int: "Intermediate", adv: "Advanced" };
+const PROP_LABEL = { type: "Counted / timed", uni: "Both sides" };
 
 /* stable id for a suggestion (exercise + property + value) so discards persist */
 const keyOf = (s) => {
-  const v = s.prop === "level" ? s.patch.level
-    : s.prop === "uni" ? String(s.patch.uni)
+  const v = s.prop === "uni" ? String(s.patch.uni)
     : s.patch.type === "time" ? `time${s.patch.secs || ""}` : "reps";
   return `${s.exId}|${s.prop}|${v}`;
 };
@@ -34,10 +32,7 @@ export async function fetchValidations(exOverrides, dismissedSet) {
     const uid = d.ref.parent.parent ? d.ref.parent.parent.id : "?";
     let val; try { val = JSON.parse(d.data().value); } catch (e) { return; }
     if (!val || typeof val !== "object") return;
-    if (d.id === "levelover") {
-      for (const [id, lv] of Object.entries(val))
-        if (LEVEL_NAME[lv]) bump(id, "level", { level: lv }, LEVEL_NAME[lv], uid);
-    } else if (d.id === "unilateral") {
+    if (d.id === "unilateral") {
       for (const [id, u] of Object.entries(val))
         bump(id, "uni", { uni: !!u }, u ? "Per side (R/L)" : "No sides", uid);
     } else if (d.id === "typeover") {

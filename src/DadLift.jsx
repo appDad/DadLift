@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { loadJSON, saveJSON } from "./storage";
 import { coachModel } from "./firebase";
-import { POSES, GROUPS, BUILTIN, EQUIPMENT, DEFAULT_EQUIP, normalizeEquip, inferEquip, famOf, levelOf, LEVEL_LABEL, extendEquipment, equipSlug, buildAddPrompt, validateExercise, resolveFrames } from "./exercises";
+import { POSES, GROUPS, BUILTIN, EQUIPMENT, DEFAULT_EQUIP, normalizeEquip, inferEquip, famOf, extendEquipment, equipSlug, buildAddPrompt, validateExercise, resolveFrames } from "./exercises";
 import { loadExOverrides, saveExOverrides } from "./exoverrides";
 import { ACTIVITIES, CUSTOM_ICONS, CUSTOM_ACT_ICON } from "./activities";
 import { loadEquipExtensions, saveEquipExtensions } from "./catalog";
@@ -81,19 +81,9 @@ function weightedPick(pool, count, rng, ratings, usedFams) {
    "intermediate" includes beginner moves too. Keep exercises at or below the
    chosen level; per group, if nothing qualifies, keep that group's moves so the
    workout still fills every slot. */
-const LEVEL_RANK = { beg: 0, int: 1, adv: 2 };
-function filterByLevel(pool, level) {
-  const cap = level === "all" ? 2 : (LEVEL_RANK[level] ?? 2);
-  if (cap >= 2) return pool; // advanced = anything goes
-  const byGrp = {};
-  for (const e of pool) (byGrp[e.grp] = byGrp[e.grp] || []).push(e);
-  const out = [];
-  for (const g in byGrp) {
-    const m = byGrp[g].filter((e) => (LEVEL_RANK[levelOf(e)] ?? 1) <= cap);
-    out.push(...(m.length ? m : byGrp[g]));
-  }
-  return out;
-}
+/* "too hard" bench: a benched exercise sits out of workout generation for
+   this many days, then quietly comes back on its own */
+const BENCH_DAYS = 21;
 
 function buildWorkout(date, allEx, emphasis, ratings = {}, nonce = 0, slots = 8, focusPct = 50) {
   const rng = mulberry32(dateSeed(date) + nonce * 131071); // reshuffles re-roll deterministically
@@ -498,7 +488,7 @@ function Settings({ tempo, setTempo, restSecs, setRestSecs, roundRest, setRoundR
 }
 
 /* ============ library screen ============ */
-function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, communityBy, onHide, ownedEquip, ownedCount, onSetEq, uniOf, onToggleUni, isAdmin, onToggleType, cadenceOf, onSetCad, onSetLevel, onAdminDelete, nav }) {
+function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, communityBy, onHide, ownedEquip, ownedCount, onSetEq, uniOf, onToggleUni, isAdmin, onToggleType, cadenceOf, onSetCad, benchedOf, onBench, onUnbench, onAdminDelete, nav }) {
   const [openId, setOpenId] = useState(null);
   const [tab, setTab] = useState("browse"); // browse | add | export
   const [pasteVal, setPasteVal] = useState("");
@@ -640,17 +630,17 @@ function Library({ allEx, custom, onAdd, onRemove, onBack, ratings, onRate, comm
                               <button onClick={() => onSetCad(e.id, cadenceOf(e) - 0.5)} style={{ border: "none", background: "#FFFFFF", borderRadius: 999, width: 24, height: 24, cursor: "pointer", fontSize: 13 }}>+</button>
                             </div>
                           )}
-                          <div style={{ display: "inline-flex", gap: 3, background: "#EFF1F5", borderRadius: 999, padding: 3 }}>
-                            {[["beg", "BEG", "#2FA671"], ["int", "INT", "#4F7DF0"], ["adv", "ADV", "#E8433F"]].map(([lv, ltr, col]) => {
-                              const on = levelOf(e) === lv;
-                              return (
-                                <button key={lv} onClick={() => onSetLevel(e.id, lv)}
-                                  style={{ border: "none", cursor: "pointer", borderRadius: 999, padding: "4px 9px", fontSize: 10, fontWeight: 700, letterSpacing: 0.5, background: on ? col : "transparent", color: on ? "#FFFFFF" : "#9AA3B0" }}>
-                                  {ltr}
-                                </button>
-                              );
-                            })}
-                          </div>
+                          {benchedOf(e.id) ? (
+                            <button onClick={() => onUnbench(e.id)}
+                              style={{ ...S.pill, padding: "6px 10px", fontSize: 12, background: "#FFF3E0", color: "#8A5A16", outline: "1.5px solid #F2C98A" }}>
+                              benched — bring it back
+                            </button>
+                          ) : (
+                            <button onClick={() => onBench(e.id)}
+                              style={{ ...S.pill, padding: "6px 10px", fontSize: 12, background: "#EFF1F5", color: "#3D4756" }}>
+                              too hard — rest it
+                            </button>
+                          )}
                           {isCustom && (
                             <select value={e.eq || ""} onChange={(ev) => onSetEq(e.id, ev.target.value || null)}
                               style={{ border: "1px solid #DDE2E9", borderRadius: 8, background: "#EFF1F5", color: "#3D4756", fontSize: 12, padding: "6px 8px" }}>
@@ -796,12 +786,11 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   const [goEffort, setGoEffort] = useState("steady"); // easy | steady | hard
   const [fullMins, setFullMins] = useState(20); // full-workout time budget
   const [fullEffort, setFullEffort] = useState("steady"); // easy | steady | hard
-  const [workoutLevel, setWorkoutLevel] = useState("adv"); // beg | int | adv — a ceiling (adv = everything)
+  const [benched, setBenched] = useState({}); // exercise id -> ymd it was benched ("too hard"); auto-returns after BENCH_DAYS
   const [reviewCount, setReviewCount] = useState(0); // admin: pending Validate items (for the home badge)
   const [extEquip, setExtEquip] = useState({}); // admin-added catalog entries (config/equipment)
   const [exOverrides, setExOverrides] = useState({}); // admin exercise property overrides (config/exercises)
   const [typeOver, setTypeOver] = useState({}); // personal counted/timed flips (non-admin users)
-  const [levelOver, setLevelOver] = useState({}); // personal difficulty overrides (per user, never global)
   const [shuffleN, setShuffleN] = useState(0); // today's reshuffle count — new seed each press
   const [excluded, setExcluded] = useState([]); // exercises thumbed out of TODAY'S workout
   const savedRef = useRef(false);
@@ -832,13 +821,12 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       let out = e;
       if (a) out = { ...out, ...a };
       if (p) out = { ...out, ...p };
-      if (levelOver[e.id]) out = { ...out, level: levelOver[e.id] }; // personal difficulty override (wins over admin global)
       return out;
     };
     return [...BUILTIN, ...comm.map(tagEq), ...customEx.map(tagEq)]
       .map(applyOverride)
       .filter((e) => !e.hidden); // admin-hidden built-ins disappear for everyone
-  }, [customEx, community, hiddenComm, extEquip, exOverrides, typeOver, levelOver]);
+  }, [customEx, community, hiddenComm, extEquip, exOverrides, typeOver]);
   const communityBy = useMemo(
     () => Object.fromEntries(community.map((c) => [c.ex.id, c.by])),
     [community]
@@ -850,15 +838,30 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   }, [owned]);
   const haveEquip = (key) => owned.includes(key) && equip[key] !== false; // not owned = never available
   /* only build workouts from exercises whose equipment is on hand */
+  /* "too hard": bench an exercise — it sits out of generation for BENCH_DAYS,
+     then returns on its own. Personal, immediate (workout rebuilds on tap). */
+  const isBenched = (id) => {
+    const d = benched[id];
+    if (!d) return false;
+    return (new Date(ymd(today) + "T00:00:00") - new Date(d + "T00:00:00")) / 86400000 < BENCH_DAYS;
+  };
+  const benchExercise = (id) => {
+    const next = { ...benched, [id]: ymd(today) };
+    setBenched(next);
+    saveJSON("benched", next);
+  };
+  const unbenchExercise = (id) => {
+    const next = { ...benched };
+    delete next[id];
+    setBenched(next);
+    saveJSON("benched", next);
+  };
   /* gyms have everything — the gym tab ignores home equipment ownership */
   const availEx = useMemo(
-    () => (venue === "gym" ? allEx : allEx.filter((e) => !e.eq || haveEquip(e.eq))),
+    () => (venue === "gym" ? allEx : allEx.filter((e) => !e.eq || haveEquip(e.eq))).filter((e) => !isBenched(e.id)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allEx, equip, owned, venue]
+    [allEx, equip, owned, venue, benched]
   );
-  /* difficulty-filtered pool that feeds the full-workout builder. Rebuilds
-     immediately when a level is edited (levelOver is baked into allEx). */
-  const levelPool = useMemo(() => filterByLevel(availEx, workoutLevel), [availEx, workoutLevel]);
 
   /* per-move time cost: work at current pacing (or interval), ×2 passes,
      get-set countdown, and rest — shared by both session planners */
@@ -873,31 +876,31 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   /* how many slots per round fit the full-workout time budget */
   const fullScale = EFFORT_SCALE[fullEffort] || 1;
   const fullSlots = useMemo(() => {
-    const pool = levelPool.filter((e) => !excluded.includes(e.id));
+    const pool = availEx.filter((e) => !excluded.includes(e.id));
     if (!pool.length) return 8;
     const avg = pool.reduce((s, e) => s + estCost(e, fullScale), 0) / pool.length;
     const budget = fullMins * 60 - (rounds - 1) * roundRest;
     return Math.max(3, Math.min(14, Math.round(budget / (avg * rounds))));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [levelPool, excluded, fullMins, fullEffort, rounds, roundRest, mode, hiit, tempo, readySecs, restSecs, uniOverride]);
+  }, [availEx, excluded, fullMins, fullEffort, rounds, roundRest, mode, hiit, tempo, readySecs, restSecs, uniOverride]);
 
   const workout = useMemo(
     () => buildWorkout(
       today,
-      levelPool.filter((e) => !excluded.includes(e.id)),
+      availEx.filter((e) => !excluded.includes(e.id)),
       emphasis === "balanced" ? null : emphasis,
       ratings,
       shuffleN,
       fullSlots,
       focusPct
     ),
-    [today, levelPool, emphasis, ratings, shuffleN, excluded, fullSlots, focusPct]
+    [today, availEx, emphasis, ratings, shuffleN, excluded, fullSlots, focusPct]
   );
   /* burn-on-the-go: bodyweight-only, sized to fit the chosen time budget.
      Groups rotate for balance. */
   const goPlan = useMemo(() => {
     const rng = mulberry32(dateSeed(today) * 7 + 13 + shuffleN * 131071);
-    const pool = filterByLevel(allEx.filter((e) => !e.eq && !excluded.includes(e.id)), workoutLevel);
+    const pool = allEx.filter((e) => !e.eq && !excluded.includes(e.id) && !isBenched(e.id));
     const scale = EFFORT_SCALE[goEffort] || 1;
     const est = (e) => estCost(e, scale);
     // shuffled group order, up to 3 candidates queued per group
@@ -927,7 +930,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       }
     }
     return { picks, estMins: Math.max(1, Math.round(used / 60)) };
-  }, [today, allEx, excluded, ratings, shuffleN, goMins, goEffort, mode, hiit, tempo, readySecs, restSecs, workout.reps, uniOverride, customEx, workoutLevel]);
+  }, [today, allEx, excluded, ratings, shuffleN, goMins, goEffort, mode, hiit, tempo, readySecs, restSecs, workout.reps, uniOverride, customEx, benched]);
   const anywhereWorkout = goPlan.picks;
 
   // during a session, keep the SAME exercises (frozen ids) but resolve each to
@@ -992,7 +995,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       const ov = await loadExOverrides();
       setExOverrides(ov);
       setTypeOver(await loadJSON("typeover", {}));
-      setLevelOver(await loadJSON("levelover", {}));
+      setBenched(await loadJSON("benched", {}));
       // per-day workout tweaks: reshuffle count + thumbed-out exercises
       const tweaks = await loadJSON("daytweaks", null);
       if (tweaks && tweaks.d === ymd(today)) {
@@ -1050,7 +1053,6 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         setGoMins(s.goMins ?? 10);
         setFullMins(s.fullMins ?? 20);
         // effort option removed — everything runs at "steady" (×1, no rep scaling)
-        setWorkoutLevel((s.workoutLevel ?? "adv") === "all" ? "adv" : (s.workoutLevel ?? "adv"));
         setEquip(s.equip ?? {});
         // normalize any legacy free-text equipment into catalog keys
         // ownership list; migrate legacy customEquip additions into it
@@ -1061,8 +1063,8 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
   }, []);
   useEffect(() => {
     if (!loaded) return;
-    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, fullMins, equip, owned, workoutLevel, gymRest, focusPct }, { debounce: 600 });
-  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, fullMins, equip, owned, workoutLevel, gymRest, focusPct]);
+    saveJSON("settings", { rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, fullMins, equip, owned, gymRest, focusPct }, { debounce: 600 });
+  }, [loaded, rounds, tempo, voiceOn, mode, hiit, restSecs, roundRest, emphasis, readySecs, goMins, fullMins, equip, owned, gymRest, focusPct]);
 
   /* admin: count pending Validate items once after load, for the home badge */
   useEffect(() => {
@@ -1108,18 +1110,6 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
     if (Math.abs(v - tempo) < 0.001) delete next[id]; // matches default — drop it
     setCadence(next);
     saveJSON("cadence", next);
-  };
-  /* difficulty edit. Admin = head validator: sets the GLOBAL default for
-     everyone. Any user's personal pick overrides that default for themselves. */
-  const setLevelOv = (id, lv) => {
-    if (isAdmin) {
-      setAdminOverride(id, { level: lv }); // global default (config/exercises)
-      if (levelOver[id]) { const n = { ...levelOver }; delete n[id]; setLevelOver(n); saveJSON("levelover", n); } // my global wins — drop my personal shadow
-    } else {
-      const next = { ...levelOver, [id]: lv };
-      setLevelOver(next);
-      saveJSON("levelover", next);
-    }
   };
 
   /* two-pass (per-side) control. Precedence: my personal override, then the
@@ -1692,7 +1682,7 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
       ownedEquip={equipKeys.filter(haveEquip)} ownedCount={owned.length} onSetEq={setCustomEq}
       uniOf={effUni} onToggleUni={toggleUni}
       isAdmin={isAdmin} onToggleType={toggleType}
-      cadenceOf={cadenceOf} onSetCad={setCad} onSetLevel={setLevelOv} onAdminDelete={adminDeleteExercise}
+      cadenceOf={cadenceOf} onSetCad={setCad} benchedOf={isBenched} onBench={benchExercise} onUnbench={unbenchExercise} onAdminDelete={adminDeleteExercise}
       nav={<NavBar current="library" onNav={setScreen} weighDue={weighDue} />}
       onBack={() => setScreen("home")} />;
   }
@@ -2168,28 +2158,6 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
           </div>
         )}
 
-        <div style={{ padding: "0 16px 12px" }}>
-          <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#6C7686", fontWeight: 700, marginBottom: 8 }}>
-            DIFFICULTY <span style={{ fontWeight: 400, letterSpacing: 0.5 }}>— up to and including</span>
-          </div>
-          <div style={{ display: "flex", gap: 8, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
-            {[["beg", "BEGINNER"], ["int", "INTERMEDIATE"], ["adv", "ADVANCED"]].map(([k, label]) => {
-              const on = workoutLevel === k;
-              return (
-                <button key={k} onClick={() => setWorkoutLevel(k)}
-                  style={{
-                    flexShrink: 0, border: "none", borderRadius: 999, cursor: "pointer", padding: "8px 16px",
-                    fontFamily: DISPLAY, fontSize: 14, fontWeight: 700, letterSpacing: 0.5,
-                    background: on ? "#1B2430" : "#FFFFFF", color: on ? "#FFFFFF" : "#6C7686",
-                    boxShadow: on ? "0 3px 10px rgba(27,36,48,0.22)" : "0 1px 3px rgba(27,36,48,0.08)",
-                  }}>
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px" }}>
           {homeList.map((e) => {
             const g = GROUPS[e.grp];
@@ -2216,11 +2184,6 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                       )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                      {(() => {
-                        const lv = levelOf(e);
-                        const c = { beg: ["#2FA671", "#DCF3E7"], int: ["#4F7DF0", "#DCE7FB"], adv: ["#E8433F", "#FCE0DE"] }[lv];
-                        return <span style={{ fontSize: 9, letterSpacing: 0.5, fontWeight: 700, color: c[0], background: c[1], borderRadius: 5, padding: "2px 6px" }}>{lv.toUpperCase()}</span>;
-                      })()}
                       {e.type === "time" && (
                         <span style={{ fontSize: 9, letterSpacing: 0.5, fontWeight: 700, color: "#6C7686", background: "#EFF1F5", borderRadius: 5, padding: "2px 6px" }}>⏱ TIMED</span>
                       )}
@@ -2261,17 +2224,11 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
                             <button onClick={() => setCad(e.id, cadenceOf(e) - 0.5)} style={{ border: "none", background: "#FFFFFF", borderRadius: 999, width: 24, height: 24, cursor: "pointer", fontSize: 13, lineHeight: 1 }}>+</button>
                           </div>
                         )}
-                        <div onClick={(ev) => ev.stopPropagation()} style={{ display: "inline-flex", gap: 3, background: "#EFF1F5", borderRadius: 999, padding: 3 }}>
-                          {[["beg", "BEG", "#2FA671"], ["int", "INT", "#4F7DF0"], ["adv", "ADV", "#E8433F"]].map(([lv, ltr, col]) => {
-                            const on = levelOf(e) === lv;
-                            return (
-                              <button key={lv} onClick={() => setLevelOv(e.id, lv)}
-                                style={{ border: "none", cursor: "pointer", borderRadius: 999, padding: "4px 9px", fontSize: 10, fontWeight: 700, letterSpacing: 0.5, background: on ? col : "transparent", color: on ? "#FFFFFF" : "#9AA3B0" }}>
-                                {ltr}
-                              </button>
-                            );
-                          })}
-                        </div>
+                        <button onClick={(ev) => { ev.stopPropagation(); benchExercise(e.id); }}
+                          title={`Too hard right now — sits out for ${BENCH_DAYS} days, then comes back`}
+                          style={{ ...S.pill, padding: "7px 12px", fontSize: 12, background: "#EFF1F5", color: "#3D4756" }}>
+                          too hard — rest it
+                        </button>
                         <div style={{ flex: 1 }} />
                         <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                           <button onClick={(ev) => { ev.stopPropagation(); rate(e.id, ratings[e.id] === 1 ? 0 : 1); }}
@@ -2450,18 +2407,16 @@ export default function DadLift({ user, isAdmin, onSignOut }) {
         </button>
       </div>
       <div>
-        <div style={subLbl}>DIFFICULTY</div>
-        <div style={{ display: "flex", gap: 8 }}>
-          {[["beg", "BEG", "#2FA671"], ["int", "INT", "#4F7DF0"], ["adv", "ADV", "#E8433F"]].map(([lv, label, col]) => {
-            const on = levelOf(ex) === lv;
-            return (
-              <button key={lv} onClick={() => setLevelOv(ex.id, lv)}
-                style={{ ...exBtn, flex: 1, background: on ? col : "#EFF1F5", color: on ? "#FFFFFF" : "#3D4756" }}>
-                {label}
-              </button>
-            );
-          })}
-        </div>
+        <button onClick={() => {
+            benchExercise(ex.id);
+            setSettingsModal(false);
+            setPaused(false);
+            if (phase !== "rest") advance(true); // skip the rest of this set too
+          }}
+          title={`Benches it for ${BENCH_DAYS} days, then it comes back on its own`}
+          style={{ ...exBtn, width: "100%", background: "#FCE8E6", color: "#C53030" }}>
+          TOO HARD — SKIP &amp; REST IT FOR A WHILE
+        </button>
       </div>
     </div>
   ) : null;
