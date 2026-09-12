@@ -30,11 +30,17 @@ jobs:
         with:
           node-version: 20
       - run: npm install -g @bubblewrap/cli
-      - name: Point Bubblewrap at the runner's JDK + SDK (avoids interactive prompts)
+      - name: Build a Bubblewrap-shaped SDK (it wants <sdk>/bin/sdkmanager and uses <sdk> as sdk_root)
         run: |
-          mkdir -p ~/.bubblewrap
-          printf '{"jdkPath":"%s","androidSdkPath":"%s"}\n' "$JAVA_HOME" "$ANDROID_HOME" > ~/.bubblewrap/config.json
-          cat ~/.bubblewrap/config.json
+          BW="$HOME/bw-sdk"; mkdir -p "$BW/licenses" ~/.bubblewrap
+          cp -r "$ANDROID_HOME/cmdline-tools/latest/." "$BW/"
+          cp -r "$ANDROID_HOME/licenses/." "$BW/licenses/" 2>/dev/null || true
+          yes | "$BW/bin/sdkmanager" --sdk_root="$BW" --licenses >/dev/null 2>&1 || true
+          "$BW/bin/sdkmanager" --sdk_root="$BW" "platform-tools" "build-tools;36.1.0" "platforms;android-36" "platforms;android-35" "platforms;android-34" >/dev/null
+          echo "ANDROID_HOME=$BW" >> "$GITHUB_ENV"; echo "ANDROID_SDK_ROOT=$BW" >> "$GITHUB_ENV"
+          printf '{"jdkPath":"%s","androidSdkPath":"%s"}
+' "$JAVA_HOME" "$BW" > ~/.bubblewrap/config.json
+          cat ~/.bubblewrap/config.json; ls "$BW"
       - name: Restore signing keystore
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > dadlift.keystore
       - name: Resolve version
