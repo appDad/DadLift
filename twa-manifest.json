@@ -1,0 +1,47 @@
+{
+  "packageId": "app.web.dadlift",
+  "host": "dadlift.web.app",
+  "name": "DadLift",
+  "launcherName": "DadLift",
+  "display": "standalone",
+  "themeColor": "#F2F6FF",
+  "themeColorDark": "#1B2430",
+  "navigationColor": "#F2F6FF",
+  "navigationColorDark": "#1B2430",
+  "navigationDividerColor": "#F2F6FF",
+  "navigationDividerColorDark": "#1B2430",
+  "backgroundColor": "#F2F6FF",
+  "enableNotifications": false,
+  "startUrl": "/",
+  "iconUrl": "https://dadlift.web.app/icons/dadlift-icon-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./dadlift.keystore",
+    "alias": "dadlift"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://dadlift.web.app/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://dadlift.web.app/",
+  "minSdkVersion": 21,
+  "orientation": "default",
+  "fingerprints": [
+    {
+      "name": "release",
+      "value": "A6:CC:9A:10:9A:35:F9:D7:84:07:B0:70:4B:5A:CB:03:09:E6:4E:AD:DC:4E:18:F4:5C:85:B9:1C:EE:6C:01:3A"
+    }
+  ],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "appVersion": "1.0.0"
+}

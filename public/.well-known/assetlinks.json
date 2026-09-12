@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "app.web.dadlift",
+    "sha256_cert_fingerprints": ["A6:CC:9A:10:9A:35:F9:D7:84:07:B0:70:4B:5A:CB:03:09:E6:4E:AD:DC:4E:18:F4:5C:85:B9:1C:EE:6C:01:3A"]
+  }
+}]
