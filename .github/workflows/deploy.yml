@@ -1,0 +1,58 @@
+# Push to main = deploy. GitHub is the deployment channel: every merge to main
+# builds the site and publishes it to Firebase Hosting (the live channel), so
+# the installed PWA and the website pick it up on their next open.
+#
+# One-time setup (needs a browser): `firebase init hosting:github` creates the
+# deploy service account and stores it as the FIREBASE_SERVICE_ACCOUNT_DADLIFT
+# repo secret. Until that secret exists, the build still runs but the deploy
+# step is skipped (no red X, just a notice).
+name: Deploy to Firebase Hosting
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-live
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      # Firebase web config — referrer-restricted browser keys, held as
+      # encrypted repo secrets (never committed; see .env.example)
+      VITE_FB_API_KEY: ${{ secrets.VITE_FB_API_KEY }}
+      VITE_FB_AUTH_DOMAIN: ${{ secrets.VITE_FB_AUTH_DOMAIN }}
+      VITE_FB_PROJECT_ID: ${{ secrets.VITE_FB_PROJECT_ID }}
+      VITE_FB_STORAGE_BUCKET: ${{ secrets.VITE_FB_STORAGE_BUCKET }}
+      VITE_FB_MESSAGING_SENDER_ID: ${{ secrets.VITE_FB_MESSAGING_SENDER_ID }}
+      VITE_FB_APP_ID: ${{ secrets.VITE_FB_APP_ID }}
+      VITE_RECAPTCHA_SITE_KEY: ${{ secrets.VITE_RECAPTCHA_SITE_KEY }}
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DADLIFT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Deploy to Firebase Hosting (live)
+        if: env.FIREBASE_SA != ''
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DADLIFT }}
+          projectId: dadlift
+          channelId: live
+
+      - name: Deploy skipped — service account secret not set yet
+        if: env.FIREBASE_SA == ''
+        run: |
+          echo "::notice title=Deploy skipped::Build succeeded, but FIREBASE_SERVICE_ACCOUNT_DADLIFT is not set. Run 'firebase init hosting:github' once to create it; pushes will deploy after that."
