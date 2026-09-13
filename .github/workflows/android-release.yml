@@ -25,21 +25,23 @@ jobs:
           java-version: "17"
       - uses: android-actions/setup-android@v3
         with:
-          packages: "platform-tools platforms;android-34 build-tools;34.0.0"
+          packages: "platform-tools platforms;android-36 platforms;android-35 platforms;android-34 build-tools;36.1.0 build-tools;34.0.0"
       - uses: actions/setup-node@v4
         with:
           node-version: 20
       - run: npm install -g @bubblewrap/cli
-      - name: Build a Bubblewrap-shaped SDK (it wants <sdk>/bin/sdkmanager and uses <sdk> as sdk_root)
+      - name: Make the runner SDK pass Bubblewrap's check (it wants <sdk>/bin/sdkmanager) and verify packages
         run: |
-          BW="$HOME/bw-sdk"; mkdir -p "$BW/licenses" ~/.bubblewrap
-          cp -r "$ANDROID_HOME/cmdline-tools/latest/." "$BW/"
-          cp -r "$ANDROID_HOME/licenses/." "$BW/licenses/" 2>/dev/null || true
-          yes | "$BW/bin/sdkmanager" --sdk_root="$BW" --licenses >/dev/null 2>&1 || true
-          "$BW/bin/sdkmanager" --sdk_root="$BW" "platform-tools" "build-tools;36.1.0" "platforms;android-36" "platforms;android-35" "platforms;android-34" >/dev/null
-          echo "ANDROID_HOME=$BW" >> "$GITHUB_ENV"; echo "ANDROID_SDK_ROOT=$BW" >> "$GITHUB_ENV"
-          BW="$BW" node -e "require('fs').writeFileSync(require('os').homedir()+'/.bubblewrap/config.json', JSON.stringify({jdkPath:process.env.JAVA_HOME, androidSdkPath:process.env.BW}))"
-          cat ~/.bubblewrap/config.json; ls "$BW"
+          sudo ln -sfn "$ANDROID_HOME/cmdline-tools/latest/bin" "$ANDROID_HOME/bin"
+          sudo ln -sfn "$ANDROID_HOME/cmdline-tools/latest/lib" "$ANDROID_HOME/lib"
+          yes | "$ANDROID_HOME/bin/sdkmanager" --sdk_root="$ANDROID_HOME" --licenses >/dev/null 2>&1 || true
+          "$ANDROID_HOME/bin/sdkmanager" --sdk_root="$ANDROID_HOME" "platforms;android-36" "build-tools;36.1.0" | tail -3
+          echo "platforms:"; ls "$ANDROID_HOME/platforms"; echo "build-tools:"; ls "$ANDROID_HOME/build-tools"
+          test -d "$ANDROID_HOME/platforms/android-36" || { echo "::error::platforms;android-36 missing"; exit 1; }
+          test -d "$ANDROID_HOME/build-tools/36.1.0" || { echo "::error::build-tools;36.1.0 missing"; exit 1; }
+          mkdir -p ~/.bubblewrap
+          node -e "require('fs').writeFileSync(require('os').homedir()+'/.bubblewrap/config.json', JSON.stringify({jdkPath:process.env.JAVA_HOME, androidSdkPath:process.env.ANDROID_HOME}))"
+          cat ~/.bubblewrap/config.json
       - name: Restore signing keystore
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > dadlift.keystore
       - name: Resolve version
