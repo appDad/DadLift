@@ -38,8 +38,7 @@ jobs:
           yes | "$BW/bin/sdkmanager" --sdk_root="$BW" --licenses >/dev/null 2>&1 || true
           "$BW/bin/sdkmanager" --sdk_root="$BW" "platform-tools" "build-tools;36.1.0" "platforms;android-36" "platforms;android-35" "platforms;android-34" >/dev/null
           echo "ANDROID_HOME=$BW" >> "$GITHUB_ENV"; echo "ANDROID_SDK_ROOT=$BW" >> "$GITHUB_ENV"
-          printf '{"jdkPath":"%s","androidSdkPath":"%s"}
-' "$JAVA_HOME" "$BW" > ~/.bubblewrap/config.json
+          BW="$BW" node -e "require('fs').writeFileSync(require('os').homedir()+'/.bubblewrap/config.json', JSON.stringify({jdkPath:process.env.JAVA_HOME, androidSdkPath:process.env.BW}))"
           cat ~/.bubblewrap/config.json; ls "$BW"
       - name: Restore signing keystore
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > dadlift.keystore
